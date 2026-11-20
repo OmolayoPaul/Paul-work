@@ -1,0 +1,17 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d --build",
+  "secrets": [
+    {
+      "name": "GOOGLE_CLIENT_ID",
+      "description": "Google OAuth Web Client ID used for Google-only sign-in. Create it in Google Cloud Console > APIs & Services > Credentials, and add the app origin to the authorised JavaScript origins.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "SUPER_ADMIN_EMAIL",
+      "description": "Google email address of the first super admin (the person who manages staff accounts).",
+      "requiredAtBoot": false
+    }
+  ]
+}
