@@ -1,0 +1,137 @@
+# Afridetect EMR — sandbox development stack.
+#
+# Runs the cloned source with live reload:
+#   web  -> Vite dev server on host port 3000 (proxies /api to the API)
+#   api  -> FastAPI + uvicorn --reload
+#   db   -> PostgreSQL 16
+#   setup-> one-shot table creation + first super admin seed
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_USER: afridetect
+      POSTGRES_PASSWORD: afridetect_dev
+      POSTGRES_DB: afridetect
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afridetect -d afridetect"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  setup:
+    build:
+      context: ${BASE44_PROJECT_ROOT}/backend
+      dockerfile: Dockerfile
+    working_dir: /workspace/backend
+    command: ["python", "-m", "app.setup"]
+    restart: "no"
+    volumes:
+      - ${BASE44_PROJECT_ROOT}:/workspace
+    environment:
+      - DATABASE_URL=postgresql+psycopg://afridetect:afridetect_dev@db:5432/afridetect
+      - BASE44_PREVIEW_MODE
+    env_file:
+      - ${BASE44_PROJECT_ROOT}/.env.base44-defaults
+      - /run/base44/app.env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ${BASE44_PROJECT_ROOT}/backend
+      dockerfile: Dockerfile
+    restart: on-failure
+    init: true
+    working_dir: /workspace/backend
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "/workspace/backend",
+      ]
+    volumes:
+      - ${BASE44_PROJECT_ROOT}:/workspace
+    environment:
+      - DATABASE_URL=postgresql+psycopg://afridetect:afridetect_dev@db:5432/afridetect
+      - BASE44_PREVIEW_MODE
+    env_file:
+      - ${BASE44_PROJECT_ROOT}/.env.base44-defaults
+      - /run/base44/app.env
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health').status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  web:
+    image: node:22-bookworm-slim
+    restart: on-failure
+    init: true
+    working_dir: /workspace/frontend
+    command:
+      - sh
+      - -ec
+      - |
+        if [ ! -x node_modules/.bin/vite ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+          npm ci --no-audit --no-fund
+        fi
+        exec npm run dev -- --host 0.0.0.0 --port 3000
+    volumes:
+      - ${BASE44_PROJECT_ROOT}:/workspace
+      - web_node_modules:/workspace/frontend/node_modules
+    environment:
+      - API_PROXY_TARGET=http://api:8000
+      # Preview-only host allowlisting; the platform sets these values.
+      - BASE44_PREVIEW_MODE
+      - BASE44_SANDBOX_HOST_DOMAIN
+      - BASE44_PUBLIC_HOST_SUFFIX
+      - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    labels:
+      base44.project: "Afridetect EMR"
+      base44.kind: "web"
+      base44.port: "3000"
+
+volumes:
+  db_data:
+  web_node_modules:
