@@ -10,6 +10,12 @@ export const NOTE_TYPES = {
 export const REGISTRAR_ROLES = ["super_admin", "doctor", "nurse", "records_officer"];
 export const CLINICAL_ROLES = ["super_admin", "doctor", "nurse"];
 export const PRESCRIBER_ROLES = ["super_admin", "doctor"];
+export const LAB_ROLES = ["super_admin", "lab_scientist"];
+export const PHARMACY_ROLES = ["super_admin", "pharmacist"];
+
+export const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+export const GENOTYPES = ["AA", "AS", "SS", "AC", "SC"];
+export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Widowed"];
 
 export function canRegister(role) {
   return REGISTRAR_ROLES.includes(role);
@@ -21,6 +27,14 @@ export function canWriteClinical(role) {
 
 export function canPrescribe(role) {
   return PRESCRIBER_ROLES.includes(role);
+}
+
+export function canEnterLabResult(role) {
+  return LAB_ROLES.includes(role);
+}
+
+export function canDispense(role) {
+  return PHARMACY_ROLES.includes(role);
 }
 
 export const TIMELINE_FILTERS = [

@@ -142,6 +142,67 @@ def list_patients(
     }
 
 
+def _split_allergies(text: str | None) -> list[str]:
+    if not text:
+        return []
+    parts = [part.strip(" .;") for part in text.replace(";", ",").split(",")]
+    seen: list[str] = []
+    for part in parts:
+        if part and part.lower() not in {item.lower() for item in seen}:
+            seen.append(part)
+    return seen
+
+
+def _add_allergies(db: OrmSession, patient: Patient, staff: Staff, text: str | None) -> None:
+    """Turn a free-text allergy list into the allergy records the record shows."""
+    substances = _split_allergies(text)
+    if not substances:
+        return
+    existing = {
+        allergy.substance.strip().lower()
+        for allergy in db.scalars(select(Allergy).where(Allergy.patient_id == patient.id)).all()
+    }
+    for substance in substances:
+        if substance.lower() in existing:
+            continue
+        db.add(
+            Allergy(
+                id=new_id(),
+                patient_id=patient.id,
+                substance=substance[:160],
+                severity="moderate",
+                recorded_by_id=staff.id,
+                recorded_by_name=staff.full_name,
+            )
+        )
+
+
+def _add_scan_attachment(
+    db: OrmSession,
+    patient: Patient,
+    staff: Staff,
+    *,
+    attach: bool,
+    file_name: str | None,
+    visit: Visit | None = None,
+) -> None:
+    """Record that a card was scanned. The image itself is never stored."""
+    if not attach:
+        return
+    db.add(
+        Attachment(
+            id=new_id(),
+            patient_id=patient.id,
+            visit_id=visit.id if visit else None,
+            filename=(file_name or "patient-card-scan")[:200],
+            kind="patient_card",
+            description="Patient card scanned for registration (image not stored)",
+            uploaded_by_id=staff.id,
+            uploaded_by_name=staff.full_name,
+        )
+    )
+
+
 class PatientCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
@@ -149,10 +210,19 @@ class PatientCreate(BaseModel):
     sex: str
     date_of_birth: date
     phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=160)
     address: str | None = Field(default=None, max_length=300)
+    card_number: str | None = Field(default=None, max_length=60)
     nhis_no: str | None = Field(default=None, max_length=40)
     blood_group: str | None = Field(default=None, max_length=10)
+    genotype: str | None = Field(default=None, max_length=10)
+    occupation: str | None = Field(default=None, max_length=120)
+    marital_status: str | None = Field(default=None, max_length=30)
     next_of_kin: str | None = Field(default=None, max_length=160)
+    next_of_kin_phone: str | None = Field(default=None, max_length=40)
+    allergies: str | None = Field(default=None, max_length=400)
+    attach_scan: bool = False
+    scan_file_name: str | None = Field(default=None, max_length=200)
     clinic_id: str | None = None
 
     check_in: bool = True
@@ -201,10 +271,19 @@ class PatientCreate(BaseModel):
 
 class PatientUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=160)
     address: str | None = Field(default=None, max_length=300)
+    card_number: str | None = Field(default=None, max_length=60)
     nhis_no: str | None = Field(default=None, max_length=40)
     blood_group: str | None = Field(default=None, max_length=10)
+    genotype: str | None = Field(default=None, max_length=10)
+    occupation: str | None = Field(default=None, max_length=120)
+    marital_status: str | None = Field(default=None, max_length=30)
     next_of_kin: str | None = Field(default=None, max_length=160)
+    next_of_kin_phone: str | None = Field(default=None, max_length=40)
+    allergies: str | None = Field(default=None, max_length=400)
+    attach_scan: bool = False
+    scan_file_name: str | None = Field(default=None, max_length=200)
     clinic_id: str | None = None
 
 
@@ -232,10 +311,16 @@ def create_patient(
         sex=payload.sex,
         date_of_birth=payload.date_of_birth,
         phone=(payload.phone or "").strip() or None,
+        email=(payload.email or "").strip() or None,
         address=(payload.address or "").strip() or None,
+        card_number=(payload.card_number or "").strip() or None,
         nhis_no=(payload.nhis_no or "").strip() or None,
         blood_group=payload.blood_group,
+        genotype=(payload.genotype or "").strip() or None,
+        occupation=(payload.occupation or "").strip() or None,
+        marital_status=(payload.marital_status or "").strip() or None,
         next_of_kin=(payload.next_of_kin or "").strip() or None,
+        next_of_kin_phone=(payload.next_of_kin_phone or "").strip() or None,
         clinic_id=clinic.id if clinic else None,
         registered_by_id=staff.id,
         registered_by_name=staff.full_name,
@@ -260,6 +345,16 @@ def create_patient(
             checked_in_by_name=staff.full_name,
         )
         db.add(visit)
+
+    _add_allergies(db, patient, staff, payload.allergies)
+    _add_scan_attachment(
+        db,
+        patient,
+        staff,
+        attach=payload.attach_scan,
+        file_name=payload.scan_file_name,
+        visit=visit,
+    )
     db.commit()
 
     log_event(
@@ -311,10 +406,16 @@ def update_patient(
 
     for field, label in (
         ("phone", "phone"),
+        ("email", "email"),
         ("address", "address"),
+        ("card_number", "card number"),
         ("nhis_no", "NHIS number"),
         ("blood_group", "blood group"),
+        ("genotype", "genotype"),
+        ("occupation", "occupation"),
+        ("marital_status", "marital status"),
         ("next_of_kin", "next of kin"),
+        ("next_of_kin_phone", "next of kin phone"),
     ):
         value = getattr(payload, field)
         if value is not None and value != getattr(patient, field):
@@ -329,6 +430,18 @@ def update_patient(
             )
         changes["clinic"] = (patient.clinic.name if patient.clinic else "", clinic.name if clinic else "")
         patient.clinic_id = clinic.id if clinic else None
+
+    if payload.allergies and _split_allergies(payload.allergies):
+        _add_allergies(db, patient, staff, payload.allergies)
+        changes["allergies"] = ("", payload.allergies.strip())
+
+    _add_scan_attachment(
+        db,
+        patient,
+        staff,
+        attach=payload.attach_scan,
+        file_name=payload.scan_file_name,
+    )
 
     patient.updated_at = utcnow()
     db.commit()

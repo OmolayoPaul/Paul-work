@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # Google OAuth Web Client ID. Empty means Google sign-in is not wired yet.
     google_client_id: str = ""
 
+    # Gemini API key for reading patient cards (OCR). Supplied as a secret;
+    # scanning is reported as unavailable when it is empty.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
     session_idle_minutes: int = 15
     session_absolute_hours: int = 12
 

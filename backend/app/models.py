@@ -121,10 +121,16 @@ class Patient(Base):
     sex: Mapped[str] = mapped_column(String(10), nullable=False)
     date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(40))
+    email: Mapped[str | None] = mapped_column(String(160))
     address: Mapped[str | None] = mapped_column(String(300))
+    card_number: Mapped[str | None] = mapped_column(String(60), index=True)
     nhis_no: Mapped[str | None] = mapped_column(String(40), index=True)
     blood_group: Mapped[str | None] = mapped_column(String(10))
+    genotype: Mapped[str | None] = mapped_column(String(10))
+    occupation: Mapped[str | None] = mapped_column(String(120))
+    marital_status: Mapped[str | None] = mapped_column(String(30))
     next_of_kin: Mapped[str | None] = mapped_column(String(160))
+    next_of_kin_phone: Mapped[str | None] = mapped_column(String(40))
     clinic_id: Mapped[str | None] = mapped_column(
         String(32), ForeignKey("clinics.id"), index=True
     )
@@ -226,6 +232,9 @@ class Prescription(Base):
     notes: Mapped[str | None] = mapped_column(String(300))
     prescribed_by_id: Mapped[str | None] = mapped_column(String(32))
     prescribed_by_name: Mapped[str | None] = mapped_column(String(160))
+    dispensed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dispensed_by_id: Mapped[str | None] = mapped_column(String(32))
+    dispensed_by_name: Mapped[str | None] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
     items: Mapped[list[PrescriptionItem]] = relationship(
@@ -260,6 +269,9 @@ class LabRequest(Base):
     result_summary: Mapped[str | None] = mapped_column(Text)
     requested_by_id: Mapped[str | None] = mapped_column(String(32))
     requested_by_name: Mapped[str | None] = mapped_column(String(160))
+    resulted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resulted_by_id: Mapped[str | None] = mapped_column(String(32))
+    resulted_by_name: Mapped[str | None] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

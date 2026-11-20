@@ -77,13 +77,26 @@ export default function Timeline({ entries, emptyHint }) {
                 </ul>
               )}
 
+              {entry.kind === "lab" && entry.meta?.result_summary && (
+                <p className="mt-2 whitespace-pre-wrap rounded-lg bg-sky-50 p-2.5 text-[11.5px] leading-relaxed text-sky-900">
+                  <span className="font-semibold">Result</span>
+                  <span className="block">{entry.meta.result_summary}</span>
+                </p>
+              )}
+
               <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
                 {entry.author && <span className="font-medium text-ink-soft">{entry.author}</span>}
+                {entry.kind === "lab" && entry.meta?.resulted_by_name && (
+                  <span className="text-ink-muted">· result by {entry.meta.resulted_by_name}</span>
+                )}
                 {entry.kind === "lab" && entry.meta?.status && (
                   <span className="chip bg-sky-50 px-2 py-0.5 text-sky-700">{entry.meta.status.replace("_", " ")}</span>
                 )}
                 {entry.kind === "prescription" && entry.meta?.status && (
                   <span className="chip bg-amber-50 px-2 py-0.5 text-amber-700">{entry.meta.status}</span>
+                )}
+                {entry.kind === "prescription" && entry.meta?.dispensed_by_name && (
+                  <span className="text-ink-muted">· dispensed by {entry.meta.dispensed_by_name}</span>
                 )}
               </p>
             </div>

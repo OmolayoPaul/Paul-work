@@ -12,6 +12,11 @@
       "name": "SUPER_ADMIN_EMAIL",
       "description": "Google email address of the first super admin (the person who manages staff accounts).",
       "requiredAtBoot": false
+    },
+    {
+      "name": "GEMINI_API_KEY",
+      "description": "Google AI Studio (Gemini) API key used by the backend to read patient cards. Create it at https://aistudio.google.com/app/apikey. Card scanning shows a clear message and stays off until it is set.",
+      "requiredAtBoot": false
     }
   ]
 }

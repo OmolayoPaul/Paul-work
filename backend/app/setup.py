@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from .config import settings
 from .db import Base, SessionLocal, engine
@@ -354,8 +354,36 @@ def ensure_demo_patients(db, doctor: Staff) -> None:
     print(f"seeded {len(DEMO_PATIENTS)} demo patients with visits and clinical entries")
 
 
+# Columns added after the first release. `create_all` only creates missing
+# tables, so an existing database needs these added explicitly.
+NEW_COLUMNS = [
+    ("patients", "email", "VARCHAR(160)"),
+    ("patients", "card_number", "VARCHAR(60)"),
+    ("patients", "genotype", "VARCHAR(10)"),
+    ("patients", "occupation", "VARCHAR(120)"),
+    ("patients", "marital_status", "VARCHAR(30)"),
+    ("patients", "next_of_kin_phone", "VARCHAR(40)"),
+    ("lab_requests", "resulted_at", "TIMESTAMP WITH TIME ZONE"),
+    ("lab_requests", "resulted_by_id", "VARCHAR(32)"),
+    ("lab_requests", "resulted_by_name", "VARCHAR(160)"),
+    ("prescriptions", "dispensed_at", "TIMESTAMP WITH TIME ZONE"),
+    ("prescriptions", "dispensed_by_id", "VARCHAR(32)"),
+    ("prescriptions", "dispensed_by_name", "VARCHAR(160)"),
+]
+
+
+def ensure_columns() -> None:
+    with engine.begin() as connection:
+        for table, column, ddl in NEW_COLUMNS:
+            connection.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}"))
+        connection.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_patients_card_number ON patients (card_number)")
+        )
+
+
 def main() -> None:
     Base.metadata.create_all(engine)
+    ensure_columns()
 
     db = SessionLocal()
     try:

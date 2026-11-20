@@ -17,8 +17,11 @@ export const AUDIT_ACTION_LABELS = {
   diagnosis_recorded: "Diagnosis recorded",
   prescription_recorded: "Prescription written",
   lab_requested: "Lab test requested",
+  lab_result_recorded: "Lab result recorded",
+  prescription_dispensed: "Prescription dispensed",
   allergy_recorded: "Allergy recorded",
   ocr_scan: "Card scan",
+  ocr_scan_failed: "Card scan failed",
 };
 
 export const AUDIT_CATEGORIES = [

@@ -92,10 +92,16 @@ def patient_summary(patient: Patient, last_visit: Visit | None = None) -> dict:
         "age": age_of(patient.date_of_birth),
         "age_display": age_display(patient.date_of_birth),
         "phone": patient.phone,
+        "email": patient.email,
         "address": patient.address,
+        "card_number": patient.card_number,
         "nhis_no": patient.nhis_no,
         "blood_group": patient.blood_group,
+        "genotype": patient.genotype,
+        "occupation": patient.occupation,
+        "marital_status": patient.marital_status,
         "next_of_kin": patient.next_of_kin,
+        "next_of_kin_phone": patient.next_of_kin_phone,
         "clinic": clinic_public(patient.clinic) if patient.clinic else None,
         "registered_by_name": patient.registered_by_name,
         "created_at": iso(patient.created_at),
@@ -178,6 +184,8 @@ def prescription_public(prescription: Prescription) -> dict:
         "status": prescription.status,
         "notes": prescription.notes,
         "prescribed_by_name": prescription.prescribed_by_name,
+        "dispensed_at": iso(prescription.dispensed_at),
+        "dispensed_by_name": prescription.dispensed_by_name,
         "created_at": iso(prescription.created_at),
         "items": [
             {
@@ -203,6 +211,8 @@ def lab_public(lab: LabRequest) -> dict:
         "status": lab.status,
         "result_summary": lab.result_summary,
         "requested_by_name": lab.requested_by_name,
+        "resulted_at": iso(lab.resulted_at),
+        "resulted_by_name": lab.resulted_by_name,
         "created_at": iso(lab.created_at),
     }
 
@@ -325,6 +335,8 @@ def build_timeline(
                 "visit_id": prescription.visit_id,
                 "meta": {
                     "status": prescription.status,
+                    "dispensed_at": iso(prescription.dispensed_at),
+                    "dispensed_by_name": prescription.dispensed_by_name,
                     "items": [
                         {
                             "drug_name": item.drug_name,
@@ -346,9 +358,15 @@ def build_timeline(
                 "title": "Lab request",
                 "summary": f"{lab.test_name} · {lab.status.replace('_', ' ')}",
                 "author": lab.requested_by_name,
-                "at": iso(lab.created_at),
+                "at": iso(lab.resulted_at or lab.created_at),
                 "visit_id": lab.visit_id,
-                "meta": {"specimen": lab.specimen, "status": lab.status},
+                "meta": {
+                    "specimen": lab.specimen,
+                    "status": lab.status,
+                    "result_summary": lab.result_summary,
+                    "resulted_by_name": lab.resulted_by_name,
+                    "resulted_at": iso(lab.resulted_at),
+                },
             }
         )
 
