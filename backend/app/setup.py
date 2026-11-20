@@ -47,10 +47,15 @@ CLINICS = [
 ]
 
 
-def ensure_staff(db, *, full_name: str, email: str, role: Role, department: str, staff_id: str) -> Staff:
+def ensure_staff(db, *, full_name: str, email: str, role: Role, department: str, staff_id: str, password: str = "") -> Staff:
     email = email.strip().lower()
     person = db.scalar(select(Staff).where(func.lower(Staff.email) == email))
     if person is not None:
+        # Set a password on an existing account that doesn't have one yet.
+        if password and not person.password_hash:
+            from .security import hash_password
+            person.password_hash = hash_password(password)
+            db.commit()
         return person
     person = Staff(
         id=new_id(),
@@ -61,6 +66,9 @@ def ensure_staff(db, *, full_name: str, email: str, role: Role, department: str,
         staff_id=staff_id,
         status=StaffStatus.active,
     )
+    if password:
+        from .security import hash_password
+        person.password_hash = hash_password(password)
     db.add(person)
     db.commit()
     return person
@@ -369,6 +377,7 @@ NEW_COLUMNS = [
     ("prescriptions", "dispensed_at", "TIMESTAMP WITH TIME ZONE"),
     ("prescriptions", "dispensed_by_id", "VARCHAR(32)"),
     ("prescriptions", "dispensed_by_name", "VARCHAR(160)"),
+    ("staff", "password_hash", "VARCHAR(200)"),
 ]
 
 
@@ -394,6 +403,7 @@ def main() -> None:
             role=Role.super_admin,
             department="Executive",
             staff_id="AFD-SA-001",
+            password=settings.super_admin_password,
         )
         print(f"super admin ready: {admin.email}")
 
@@ -411,6 +421,7 @@ def main() -> None:
                     role=role,
                     department=department,
                     staff_id=staff_id,
+                    password="demo1234",
                 )
                 if role == Role.doctor:
                     doctor = person

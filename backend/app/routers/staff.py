@@ -10,6 +10,7 @@ from ..db import get_db
 from ..deps import require_roles
 from ..models import AuthSession, Role, Staff, StaffStatus, new_id
 from ..schemas import staff_public
+from ..security import hash_password
 from ..utils import utcnow
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -20,6 +21,7 @@ super_admin_only = require_roles(Role.super_admin)
 class StaffCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
     email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=6, max_length=100)
     phone: str | None = Field(default=None, max_length=40)
     staff_id: str | None = Field(default=None, max_length=40)
     role: Role
@@ -41,6 +43,7 @@ class StaffUpdate(BaseModel):
     role: Role | None = None
     department: str | None = Field(default=None, max_length=120)
     status: StaffStatus | None = None
+    password: str | None = Field(default=None, min_length=6, max_length=100)
 
 
 def _active_super_admins(db: OrmSession, exclude_id: str | None = None) -> int:
@@ -102,6 +105,7 @@ def create_staff(
         role=payload.role,
         department=payload.department,
         status=StaffStatus.active,
+        password_hash=hash_password(payload.password),
     )
     db.add(person)
     db.commit()
@@ -163,6 +167,10 @@ def update_staff(
     if payload.status is not None and payload.status != person.status:
         changes["status"] = (person.status.value, payload.status.value)
         person.status = payload.status
+
+    if payload.password is not None:
+        person.password_hash = hash_password(payload.password)
+        changes["password"] = ("••••••", "••••••")
 
     person.updated_at = utcnow()
     db.commit()

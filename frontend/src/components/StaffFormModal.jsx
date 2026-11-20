@@ -8,6 +8,7 @@ import Modal from "./Modal";
 const EMPTY = {
   full_name: "",
   email: "",
+  password: "",
   phone: "",
   staff_id: "",
   role: "doctor",
@@ -19,6 +20,7 @@ function valuesFor(person) {
   return {
     full_name: person.full_name || "",
     email: person.email || "",
+    password: "",
     phone: person.phone || "",
     staff_id: person.staff_id || "",
     role: person.role || "doctor",
@@ -54,7 +56,15 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
       return;
     }
     if (!editing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Enter the Google email address they will sign in with.");
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!editing && values.password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (editing && values.password && values.password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
@@ -68,10 +78,14 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
         staff_id: values.staff_id.trim(),
         department: values.department.trim(),
       };
-      const saved = editing
-        ? await api.patch(`/staff/${person.id}`, payload)
-        : await api.post("/staff", { ...payload, email });
-      onSaved(saved, editing);
+      if (editing) {
+        if (values.password) payload.password = values.password;
+        const saved = await api.patch(`/staff/${person.id}`, payload);
+        onSaved(saved, editing);
+      } else {
+        const saved = await api.post("/staff", { ...payload, email, password: values.password });
+        onSaved(saved, editing);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,8 +100,8 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
       title={editing ? `Edit ${person.full_name}` : "Add staff"}
       description={
         editing
-          ? "Update their role, department or contact details."
-          : "Create a staff account. Only a Google account on this list can sign in."
+          ? "Update their role, department, contact details or reset their password."
+          : "Create a staff account with an email and password."
       }
       footer={
         <div className="flex items-center justify-end gap-2">
@@ -119,7 +133,7 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
 
         <div>
           <label className="label" htmlFor="staff-email">
-            Google email
+            Email
           </label>
           <input
             id="staff-email"
@@ -127,16 +141,32 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
             className="input mt-1.5 disabled:bg-canvas disabled:text-ink-muted"
             value={values.email}
             onChange={setField("email")}
-            placeholder="name@hospital.org"
+            placeholder="name@afridetect.ng"
             autoComplete="off"
             disabled={editing}
             required={!editing}
           />
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
             {editing
-              ? "The sign-in email cannot be changed. Add a new account for a different Google address."
-              : "They sign in with this Google account — there is no password to set."}
+              ? "The sign-in email cannot be changed. Add a new account for a different address."
+              : "They will sign in with this email and their password."}
           </p>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="staff-password">
+            {editing ? "Reset password (optional)" : "Password"}
+          </label>
+          <input
+            id="staff-password"
+            type="password"
+            className="input mt-1.5"
+            value={values.password}
+            onChange={setField("password")}
+            placeholder={editing ? "Leave blank to keep current" : "At least 6 characters"}
+            autoComplete="new-password"
+            required={!editing}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

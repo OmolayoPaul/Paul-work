@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
@@ -11,14 +11,15 @@ from ..db import get_db
 from ..deps import get_current_staff
 from ..models import Role, Staff, StaffStatus
 from ..schemas import staff_public
-from ..security import SESSION_COOKIE, AuthError, create_session, revoke_session
+from ..security import SESSION_COOKIE, AuthError, create_session, revoke_session, verify_password
 from ..utils import iso, utcnow
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-class GoogleLoginIn(BaseModel):
-    credential: str = Field(min_length=10)
+class PasswordLoginIn(BaseModel):
+    email: str = Field(min_length=3)
+    password: str = Field(min_length=1)
 
 
 class DevLoginIn(BaseModel):
@@ -77,65 +78,34 @@ def auth_config() -> dict:
     """Public bootstrap information for the sign-in screen."""
     return {
         "app_name": settings.app_name,
-        "google_client_id": settings.google_client_id,
-        "google_sign_in_enabled": bool(settings.google_client_id),
+        "password_sign_in_enabled": True,
         "preview_mode": settings.preview_mode,
         "idle_timeout_minutes": settings.session_idle_minutes,
     }
 
 
-@router.post("/google")
-def google_login(
-    payload: GoogleLoginIn,
+@router.post("/login")
+def password_login(
+    payload: PasswordLoginIn,
     request: Request,
     response: Response,
     db: OrmSession = Depends(get_db),
 ) -> dict:
-    if not settings.google_client_id:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "google_not_configured",
-                "message": "Google sign-in is not configured for this environment yet.",
-            },
-        )
-
-    # Imported lazily so the API can boot before Google credentials exist.
-    from google.auth.transport import requests as google_requests
-    from google.oauth2 import id_token as google_id_token
-
-    try:
-        info = google_id_token.verify_oauth2_token(
-            payload.credential, google_requests.Request(), settings.google_client_id
-        )
-    except Exception:
-        raise AuthError("invalid_google_token", "Google sign-in could not be verified.", 401)
-
-    email = (info.get("email") or "").strip().lower()
-    if not email or not info.get("email_verified"):
-        raise AuthError("unverified_email", "Your Google email could not be verified.", 403)
-
-    staff = _find_staff_by_email(db, email)
-    if staff is None:
+    staff = _find_staff_by_email(db, payload.email)
+    if staff is None or not verify_password(payload.password, staff.password_hash):
         log_event(
             db,
             action="login_denied",
-            actor_email=email,
-            summary="Google account is not on the staff list",
+            actor_email=payload.email.strip().lower(),
+            summary="Incorrect email or password",
             request=request,
         )
         raise AuthError(
-            "not_registered",
-            "Your account has not been created. Contact your administrator.",
-            403,
+            "invalid_credentials",
+            "Incorrect email or password.",
+            401,
         )
-
-    if info.get("sub") and staff.google_sub != info.get("sub"):
-        staff.google_sub = info.get("sub")
-    if info.get("picture"):
-        staff.avatar_url = info.get("picture")
-
-    return _complete_login(db, staff, request, response, "Google")
+    return _complete_login(db, staff, request, response, "password")
 
 
 @router.post("/dev-login")
@@ -148,7 +118,7 @@ def dev_login(
     """Preview-only shortcut that signs in a seeded staff account by email.
 
     Disabled unless BASE44_PREVIEW_MODE is exactly "1"; real deployments use
-    Google sign-in only.
+    email + password only.
     """
     if not settings.preview_mode:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Not found."})

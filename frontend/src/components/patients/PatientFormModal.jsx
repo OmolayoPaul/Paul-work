@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, AlertTriangle, Loader2, ScanLine, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, ShieldCheck, UserPlus } from "lucide-react";
 
 import Modal from "../Modal";
-import ConfidenceChip from "./ConfidenceChip";
-import ScanCardModal from "./ScanCardModal";
 import { api } from "../../lib/api";
 import { BILL_TYPES, BLOOD_GROUPS, CHANNELS, GENOTYPES, MARITAL_STATUSES, VISIT_TYPES } from "../../lib/clinical";
 
@@ -34,36 +32,6 @@ const EMPTY = {
   check_in: true,
 };
 
-// Which registration field each scanned field fills.
-const SCAN_TARGETS = {
-  first_name: "first_name",
-  last_name: "last_name",
-  other_names: "other_name",
-  sex: "sex",
-  date_of_birth: "date_of_birth",
-  phone: "phone",
-  email: "email",
-  address: "address",
-  next_of_kin_name: "next_of_kin",
-  next_of_kin_phone: "next_of_kin_phone",
-  card_number: "card_number",
-  nhis_number: "nhis_no",
-  blood_group: "blood_group",
-  genotype: "genotype",
-  allergies: "allergies",
-  occupation: "occupation",
-  marital_status: "marital_status",
-};
-
-function FieldLabel({ children, confidence }) {
-  return (
-    <span className="label flex items-center gap-1.5">
-      {children}
-      {confidence && confidence !== "high" ? <ConfidenceChip confidence={confidence} /> : null}
-    </span>
-  );
-}
-
 function ageFromDob(dob) {
   if (!dob) return "";
   const birth = new Date(`${dob}T00:00:00`);
@@ -78,11 +46,6 @@ function ageFromDob(dob) {
 export default function PatientFormModal({ open, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY);
   const [reference, setReference] = useState({ clinics: [], doctors: [] });
-  const [confidences, setConfidences] = useState({});
-  const [scanFileName, setScanFileName] = useState("");
-  const [attachScan, setAttachScan] = useState(false);
-  const [estimatedDob, setEstimatedDob] = useState(false);
-  const [scanOpen, setScanOpen] = useState(false);
   const [consent, setConsent] = useState(false);
   const [duplicates, setDuplicates] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -101,13 +64,8 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
     if (open) {
       setForm(EMPTY);
       setError("");
-      setConfidences({});
-      setScanFileName("");
-      setAttachScan(false);
-      setEstimatedDob(false);
       setConsent(false);
       setDuplicates(null);
-      setScanOpen(false);
       loadReference();
     }
   }, [open, loadReference]);
@@ -115,72 +73,6 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
   const setField = (key) => (event) => {
     const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
     setForm((current) => ({ ...current, [key]: value }));
-    setConfidences((current) => {
-      if (!(key in current)) return current;
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
-  };
-
-  const applyScan = (values, scannedConfidences, fileName) => {
-    const nextConfidences = {};
-    for (const [source, target] of Object.entries(SCAN_TARGETS)) {
-      if (scannedConfidences[source]) nextConfidences[target] = scannedConfidences[source];
-    }
-
-    const next = { ...form };
-    for (const [source, target] of Object.entries(SCAN_TARGETS)) {
-      const value = (values[source] || "").trim();
-      if (!value) continue;
-      if (target === "sex") {
-        const sex = value.toLowerCase();
-        if (sex === "male" || sex === "female") next.sex = sex;
-        continue;
-      }
-      if (target === "date_of_birth") {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) next.date_of_birth = value;
-        continue;
-      }
-      if (target === "blood_group") {
-        const group = value.toUpperCase().replace(/\s+/g, "");
-        if (BLOOD_GROUPS.includes(group)) next.blood_group = group;
-        continue;
-      }
-      if (target === "genotype") {
-        const genotype = value.toUpperCase().replace(/\s+/g, "");
-        if (GENOTYPES.includes(genotype)) next.genotype = genotype;
-        continue;
-      }
-      if (target === "marital_status") {
-        const match = MARITAL_STATUSES.find((status) => status.toLowerCase() === value.toLowerCase());
-        if (match) next.marital_status = match;
-        continue;
-      }
-      next[target] = value;
-    }
-
-    // A card often shows an age instead of a date of birth. Estimate the date
-    // from the age, flag it, and let the officer correct it.
-    const age = Number.parseInt(values.age || "", 10);
-    const estimated = !next.date_of_birth && Number.isFinite(age) && age >= 0 && age <= 130;
-    if (estimated) {
-      next.date_of_birth = `${new Date().getFullYear() - age}-01-01`;
-      nextConfidences.date_of_birth = "low";
-    }
-    setEstimatedDob(estimated);
-
-    setForm(next);
-    setConfidences(nextConfidences);
-    setScanFileName(fileName || "");
-    setDuplicates(null);
-  };
-
-  const inputClass = (key) => {
-    const confidence = confidences[key];
-    if (confidence === "low") return "input mt-1 border-red-300 bg-red-50/40";
-    if (confidence === "medium") return "input mt-1 border-amber-300 bg-amber-50/40";
-    return "input mt-1";
   };
 
   const submit = async (event) => {
@@ -231,8 +123,6 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
         channel: form.channel,
         assigned_doctor_id: form.assigned_doctor_id || null,
         chief_complaint: form.chief_complaint || null,
-        attach_scan: Boolean(scanFileName && attachScan),
-        scan_file_name: scanFileName || null,
       };
       const result = await api.post("/patients", payload);
       onSaved?.(result);
@@ -242,8 +132,6 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
       setSaving(false);
     }
   };
-
-  const scanned = Boolean(scanFileName);
 
   return (
     <Modal
@@ -301,7 +189,7 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               ))}
             </ul>
             <p className="text-[11.5px] leading-relaxed">
-              If this is a different person, check the details and choose “Register anyway”.
+              If this is a different person, check the details and choose "Register anyway".
             </p>
             <button type="button" className="btn-secondary py-1.5 text-[12px]" onClick={() => setDuplicates(null)}>
               Go back and edit
@@ -309,66 +197,38 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
           </div>
         )}
 
-        {scanned && (
-          <div className="flex items-start gap-2 rounded-xl border border-forest-200 bg-forest-50 px-3 py-2 text-[12px] leading-relaxed text-forest-800">
-            <ScanLine size={15} className="mt-0.5 shrink-0" />
-            <span>
-              Details taken from <span className="font-semibold">{scanFileName}</span>. Fields marked amber or red
-              need your check before you register. Nothing is saved until you confirm.
-            </span>
-          </div>
-        )}
-
         <fieldset className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest-700">Patient details</legend>
-            <button
-              type="button"
-              className="btn-secondary py-1.5 text-[12px]"
-              onClick={() => setScanOpen(true)}
-            >
-              <ScanLine size={14} />
-              Scan card
-            </button>
-          </div>
+          <legend className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest-700">Patient details</legend>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block">
-              <FieldLabel confidence={confidences.first_name}>First name *</FieldLabel>
-              <input className={inputClass("first_name")} value={form.first_name} onChange={setField("first_name")} required />
+              <span className="label">First name *</span>
+              <input className="input mt-1" value={form.first_name} onChange={setField("first_name")} required />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.last_name}>Last name *</FieldLabel>
-              <input className={inputClass("last_name")} value={form.last_name} onChange={setField("last_name")} required />
+              <span className="label">Last name *</span>
+              <input className="input mt-1" value={form.last_name} onChange={setField("last_name")} required />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.other_name}>Other name</FieldLabel>
-              <input className={inputClass("other_name")} value={form.other_name} onChange={setField("other_name")} />
+              <span className="label">Other name</span>
+              <input className="input mt-1" value={form.other_name} onChange={setField("other_name")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.sex}>Sex *</FieldLabel>
-              <select className={inputClass("sex")} value={form.sex} onChange={setField("sex")}>
+              <span className="label">Sex *</span>
+              <select className="input mt-1" value={form.sex} onChange={setField("sex")}>
                 <option value="female">Female</option>
                 <option value="male">Male</option>
               </select>
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.date_of_birth}>Date of birth *</FieldLabel>
+              <span className="label">Date of birth *</span>
               <input
                 type="date"
-                className={inputClass("date_of_birth")}
+                className="input mt-1"
                 value={form.date_of_birth}
                 max={new Date().toISOString().slice(0, 10)}
-                onChange={(event) => {
-                  setEstimatedDob(false);
-                  setField("date_of_birth")(event);
-                }}
+                onChange={setField("date_of_birth")}
                 required
               />
-              {estimatedDob && (
-                <span className="mt-1 block text-[10.5px] font-medium text-amber-700">
-                  Estimated from the age on the card — please confirm.
-                </span>
-              )}
             </label>
             <label className="block">
               <span className="label">Age</span>
@@ -381,24 +241,24 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.phone}>Phone</FieldLabel>
-              <input className={inputClass("phone")} value={form.phone} onChange={setField("phone")} placeholder="0803 000 0000" />
+              <span className="label">Phone</span>
+              <input className="input mt-1" value={form.phone} onChange={setField("phone")} placeholder="0803 000 0000" />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.email}>Email</FieldLabel>
-              <input className={inputClass("email")} type="email" value={form.email} onChange={setField("email")} />
+              <span className="label">Email</span>
+              <input className="input mt-1" type="email" value={form.email} onChange={setField("email")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.nhis_no}>NHIS number</FieldLabel>
-              <input className={inputClass("nhis_no")} value={form.nhis_no} onChange={setField("nhis_no")} />
+              <span className="label">NHIS number</span>
+              <input className="input mt-1" value={form.nhis_no} onChange={setField("nhis_no")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.card_number}>Card number</FieldLabel>
-              <input className={inputClass("card_number")} value={form.card_number} onChange={setField("card_number")} />
+              <span className="label">Card number</span>
+              <input className="input mt-1" value={form.card_number} onChange={setField("card_number")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.blood_group}>Blood group</FieldLabel>
-              <select className={inputClass("blood_group")} value={form.blood_group} onChange={setField("blood_group")}>
+              <span className="label">Blood group</span>
+              <select className="input mt-1" value={form.blood_group} onChange={setField("blood_group")}>
                 <option value="">Unknown</option>
                 {BLOOD_GROUPS.map((group) => (
                   <option key={group} value={group}>{group}</option>
@@ -406,8 +266,8 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               </select>
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.genotype}>Genotype</FieldLabel>
-              <select className={inputClass("genotype")} value={form.genotype} onChange={setField("genotype")}>
+              <span className="label">Genotype</span>
+              <select className="input mt-1" value={form.genotype} onChange={setField("genotype")}>
                 <option value="">Unknown</option>
                 {GENOTYPES.map((genotype) => (
                   <option key={genotype} value={genotype}>{genotype}</option>
@@ -415,13 +275,13 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               </select>
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.occupation}>Occupation</FieldLabel>
-              <input className={inputClass("occupation")} value={form.occupation} onChange={setField("occupation")} />
+              <span className="label">Occupation</span>
+              <input className="input mt-1" value={form.occupation} onChange={setField("occupation")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.marital_status}>Marital status</FieldLabel>
+              <span className="label">Marital status</span>
               <select
-                className={inputClass("marital_status")}
+                className="input mt-1"
                 value={form.marital_status}
                 onChange={setField("marital_status")}
               >
@@ -432,46 +292,31 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               </select>
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.next_of_kin}>Next of kin</FieldLabel>
-              <input className={inputClass("next_of_kin")} value={form.next_of_kin} onChange={setField("next_of_kin")} />
+              <span className="label">Next of kin</span>
+              <input className="input mt-1" value={form.next_of_kin} onChange={setField("next_of_kin")} />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.next_of_kin_phone}>Next of kin phone</FieldLabel>
+              <span className="label">Next of kin phone</span>
               <input
-                className={inputClass("next_of_kin_phone")}
+                className="input mt-1"
                 value={form.next_of_kin_phone}
                 onChange={setField("next_of_kin_phone")}
               />
             </label>
             <label className="block">
-              <FieldLabel confidence={confidences.allergies}>Allergies</FieldLabel>
+              <span className="label">Allergies</span>
               <input
-                className={inputClass("allergies")}
+                className="input mt-1"
                 value={form.allergies}
                 onChange={setField("allergies")}
                 placeholder="e.g. Penicillin, dust"
               />
             </label>
             <label className="block sm:col-span-3">
-              <FieldLabel confidence={confidences.address}>Address</FieldLabel>
-              <input className={inputClass("address")} value={form.address} onChange={setField("address")} />
+              <span className="label">Address</span>
+              <input className="input mt-1" value={form.address} onChange={setField("address")} />
             </label>
           </div>
-
-          {scanned && (
-            <label className="flex items-start gap-2 rounded-lg border border-line px-3 py-2 text-[12px] text-ink-soft">
-              <input
-                type="checkbox"
-                checked={attachScan}
-                onChange={(event) => setAttachScan(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-line text-forest-700"
-              />
-              <span>
-                Note the scanned card on this patient's record. The image itself is not stored; the record keeps the
-                file name only.
-              </span>
-            </label>
-          )}
         </fieldset>
 
         <fieldset className="space-y-3 border-t border-line pt-4">
@@ -565,13 +410,6 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
           </label>
         </fieldset>
       </form>
-
-      <ScanCardModal
-        open={scanOpen}
-        onClose={() => setScanOpen(false)}
-        mode="register"
-        onApply={applyScan}
-      />
     </Modal>
   );
 }

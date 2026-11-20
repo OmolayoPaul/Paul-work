@@ -14,7 +14,6 @@ import {
   Phone,
   Pill,
   RefreshCw,
-  ScanLine,
   ShieldCheck,
   Stethoscope,
   X,
@@ -26,7 +25,7 @@ import ClinicalNoteModal from "../components/patients/ClinicalNoteModal";
 import DiagnosisModal from "../components/patients/DiagnosisModal";
 import LabRequestModal from "../components/patients/LabRequestModal";
 import PrescriptionModal from "../components/patients/PrescriptionModal";
-import ScanCardModal from "../components/patients/ScanCardModal";
+
 import Timeline from "../components/patients/Timeline";
 import VitalsModal from "../components/patients/VitalsModal";
 import { api } from "../lib/api";
@@ -95,7 +94,7 @@ export default function PatientRecord() {
   const [scope, setScope] = useState("visit");
   const [modal, setModal] = useState(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
-  const [scanOpen, setScanOpen] = useState(false);
+
   const [marking, setMarking] = useState(false);
 
   const load = useCallback(async () => {
@@ -210,10 +209,6 @@ export default function PatientRecord() {
           </button>
           {canRegister(staff?.role) && (
             <>
-              <button type="button" className="btn-secondary py-2 text-[12px]" onClick={() => setScanOpen(true)}>
-                <ScanLine size={14} />
-                Scan card
-              </button>
               <button type="button" className="btn-secondary py-2 text-[12px]" onClick={() => setCheckInOpen(true)}>
                 <LogIn size={14} />
                 Check in new visit
@@ -491,21 +486,6 @@ export default function PatientRecord() {
           }
         />
       )}
-
-      <ScanCardModal
-        open={scanOpen}
-        onClose={() => setScanOpen(false)}
-        mode="update"
-        patient={patient}
-        onSaved={(_, attached) => {
-          setNotice(
-            attached
-              ? "Patient details updated from the scanned card, and the scan noted on the record."
-              : "Patient details updated from the scanned card.",
-          );
-          load();
-        }}
-      />
 
       <CheckInModal
         open={checkInOpen}

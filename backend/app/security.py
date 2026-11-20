@@ -13,6 +13,8 @@ from .utils import client_ip, utcnow
 
 SESSION_COOKIE = "afridetect_session"
 
+_PBKDF2_ITERATIONS = 200_000
+
 
 class AuthError(Exception):
     """Raised for authentication / authorisation failures."""
@@ -26,6 +28,26 @@ class AuthError(Exception):
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using PBKDF2-HMAC-SHA256. Returns 'iterations$salt$hash'."""
+    salt = secrets.token_hex(16)
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), _PBKDF2_ITERATIONS)
+    return f"{_PBKDF2_ITERATIONS}${salt}${derived.hex()}"
+
+
+def verify_password(password: str, stored: str | None) -> bool:
+    """Check a password against the stored 'iterations$salt$hash' string."""
+    if not stored:
+        return False
+    try:
+        iterations_str, salt, expected_hash = stored.split("$")
+        iterations = int(iterations_str)
+    except (ValueError, AttributeError):
+        return False
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations)
+    return secrets.compare_digest(derived.hex(), expected_hash)
 
 
 def create_session(db: OrmSession, staff: Staff, request) -> str:

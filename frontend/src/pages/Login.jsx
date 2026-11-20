@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Mail, Sparkles } from "lucide-react";
 
 import LoginArtwork from "../components/LoginArtwork";
 import Logo from "../components/Logo";
@@ -21,10 +21,10 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const [config, setConfig] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const googleMount = useRef(null);
-  const googleCallback = useRef(null);
 
   useEffect(() => {
     if (!loading && staff) navigate("/", { replace: true });
@@ -47,12 +47,13 @@ export default function Login() {
     navigate("/", { replace: true });
   }, [refresh, navigate]);
 
-  const signInWithGoogle = useCallback(
-    async (credential) => {
+  const signIn = useCallback(
+    async (event) => {
+      event.preventDefault();
       setBusy(true);
       setError("");
       try {
-        await api.post("/auth/google", { credential });
+        await api.post("/auth/login", { email, password });
         await finish();
       } catch (err) {
         setError(err.message);
@@ -60,70 +61,14 @@ export default function Login() {
         setBusy(false);
       }
     },
-    [finish],
+    [email, password, finish],
   );
 
-  useEffect(() => {
-    googleCallback.current = signInWithGoogle;
-  }, [signInWithGoogle]);
-
-  useEffect(() => {
-    if (!config?.google_client_id) return undefined;
-    let cancelled = false;
-
-    const render = () => {
-      if (cancelled || !window.google?.accounts?.id || !googleMount.current) return;
-      window.google.accounts.id.initialize({
-        client_id: config.google_client_id,
-        ux_mode: "popup",
-        callback: (response) => googleCallback.current?.(response.credential),
-      });
-      googleMount.current.innerHTML = "";
-      window.google.accounts.id.renderButton(googleMount.current, {
-        theme: "filled_black",
-        size: "large",
-        shape: "pill",
-        text: "signin_with",
-        logo_alignment: "left",
-        width: 320,
-      });
-    };
-
-    if (window.google?.accounts?.id) {
-      render();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const existing = document.querySelector("script[data-google-gsi]");
-    if (existing) {
-      existing.addEventListener("load", render);
-      return () => {
-        cancelled = true;
-        existing.removeEventListener("load", render);
-      };
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.dataset.googleGsi = "true";
-    script.addEventListener("load", render);
-    document.head.appendChild(script);
-
-    return () => {
-      cancelled = true;
-      script.removeEventListener("load", render);
-    };
-  }, [config]);
-
-  const signInAs = async (email) => {
+  const signInAs = async (devEmail) => {
     setBusy(true);
     setError("");
     try {
-      await api.post("/auth/dev-login", { email });
+      await api.post("/auth/dev-login", { email: devEmail });
       await finish();
     } catch (err) {
       setError(err.message);
@@ -169,27 +114,47 @@ export default function Login() {
               <div className="card p-6">
                 <h2 className="text-base font-bold tracking-tight text-ink">Sign in</h2>
                 <p className="mt-1 text-[13px] text-ink-soft">
-                  Use the Google account your hospital added for you.
+                  Enter your staff email and password.
                 </p>
 
-                {config?.google_sign_in_enabled ? (
-                  <div className="mt-5 flex min-h-[44px] justify-center" ref={googleMount} />
-                ) : (
-                  <div className="mt-5 rounded-xl border border-dashed border-line bg-canvas px-4 py-4 text-[12.5px] leading-relaxed text-ink-soft">
-                    {config === null
-                      ? "Checking sign-in options…"
-                      : config.preview_mode
-                        ? "Google sign-in will appear here once the hospital's Google client ID is configured. Use a preview account below."
-                        : "Google sign-in is not configured for this environment yet. Contact your administrator."}
-                  </div>
-                )}
+                <form onSubmit={signIn} className="mt-5 space-y-3.5">
+                  <label className="block">
+                    <span className="label">Email</span>
+                    <div className="relative mt-1">
+                      <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+                      <input
+                        type="email"
+                        className="input pl-10"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@afridetect.ng"
+                        autoComplete="username"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </label>
+                  <label className="block">
+                    <span className="label">Password</span>
+                    <div className="relative mt-1">
+                      <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+                      <input
+                        type="password"
+                        className="input pl-10"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        required
+                      />
+                    </div>
+                  </label>
 
-                {busy && (
-                  <p className="mt-3 flex items-center gap-2 text-[12.5px] font-medium text-forest-700">
-                    <Loader2 size={14} className="animate-spin" />
-                    Signing you in…
-                  </p>
-                )}
+                  <button type="submit" className="btn-primary w-full" disabled={busy}>
+                    {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+                    Sign in
+                  </button>
+                </form>
 
                 {error && (
                   <div
@@ -211,7 +176,7 @@ export default function Login() {
                     </p>
                   </div>
                   <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
-                    Sandbox only — pick a seeded staff account to review each role.
+                    Sandbox only — pick a seeded staff account to review each role. Password: <span className="font-mono font-semibold">demo1234</span> (admin: <span className="font-mono font-semibold">admin1234</span>).
                   </p>
                   <div className="mt-3 grid gap-1.5">
                     {accounts.map((account) => (
@@ -241,7 +206,7 @@ export default function Login() {
                 <p className="text-[12.5px] font-semibold text-ink">Invitation only</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
                   There is no public sign-up. If you don't have an account yet, ask your super admin to add
-                  your Google email to the staff list.
+                  you to the staff list.
                 </p>
               </div>
             </div>
