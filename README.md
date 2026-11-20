@@ -92,6 +92,17 @@ An email that is not on the staff list cannot sign in; the form always answers
   check patients in; doctors see their own patients plus unassigned arrivals.
 - **Patient register** (`/patients`) — every registered patient, searchable by
   patient number, name, NHIS number or phone.
+- **Consultations** (`/consultations`) — today's consultation room: the queue
+  (Hospital / Telemed, Waiting / Completed today) on the left and the selected
+  patient on the right with their complaint, latest vitals, allergies and recent
+  notes. Vitals, clinical notes, diagnoses, prescriptions and lab requests open
+  from the same panel (role-gated), and "Mark attended" completes the visit.
+  Super admin, doctor and nurse.
+- **Records** (`/records`) — the records desk: every patient file with clinic,
+  sex/age, registration date and latest visit status, searchable by card number,
+  name, NHIS number or phone, filterable by clinic and sortable by recent
+  activity, newest file or name. Opening a row goes to the full medical record.
+  Super admin, doctor, nurse, records officer and admin staff.
 - **Patient medical record** (`/patients/:id`) — header with age/sex, patient ID,
   visit type, clinic and a red allergies badge; filter tabs (View All, Vital
   Signs, Treatment Plan, Prescription, Investigations, Lab, Others); newest-first
@@ -126,6 +137,6 @@ never populated by the setup service.
 ## Status
 
 In place: shell, branding, sign-in and roles; staff management and audit log;
-worklist, patient register and the patient medical record; reports with CSV
-export. Consultations, Records, Orders and Messages are still placeholder pages
-and are built next, together with OCR patient capture.
+worklist, patient register and the patient medical record; the consultations
+room and the records desk; reports with CSV export. Orders and Messages are still
+placeholder pages and are built next, together with OCR patient capture.

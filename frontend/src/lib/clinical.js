@@ -10,6 +10,7 @@ export const NOTE_TYPES = {
 export const REGISTRAR_ROLES = ["super_admin", "doctor", "nurse", "records_officer"];
 export const CLINICAL_ROLES = ["super_admin", "doctor", "nurse"];
 export const PRESCRIBER_ROLES = ["super_admin", "doctor"];
+export const ATTENDING_ROLES = ["super_admin", "doctor"];
 
 export function canRegister(role) {
   return REGISTRAR_ROLES.includes(role);
@@ -21,6 +22,10 @@ export function canWriteClinical(role) {
 
 export function canPrescribe(role) {
   return PRESCRIBER_ROLES.includes(role);
+}
+
+export function canAttend(role) {
+  return ATTENDING_ROLES.includes(role);
 }
 
 export const TIMELINE_FILTERS = [
