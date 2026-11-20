@@ -4,13 +4,13 @@
   "startCommand": "docker compose -f docker-compose.base44.yml up -d --build",
   "secrets": [
     {
-      "name": "GOOGLE_CLIENT_ID",
-      "description": "Google OAuth Web Client ID used for Google-only sign-in. Create it in Google Cloud Console > APIs & Services > Credentials, and add the app origin to the authorised JavaScript origins.",
+      "name": "SUPER_ADMIN_PASSWORD",
+      "description": "Initial password for the first super admin account. The setup service applies it only while that account has no password, so change it from Settings after the first sign-in.",
       "requiredAtBoot": false
     },
     {
       "name": "SUPER_ADMIN_EMAIL",
-      "description": "Google email address of the first super admin (the person who manages staff accounts).",
+      "description": "Email address of the first super admin (the person who manages staff accounts and passwords).",
       "requiredAtBoot": false
     }
   ]

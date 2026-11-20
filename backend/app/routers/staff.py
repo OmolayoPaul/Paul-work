@@ -10,6 +10,7 @@ from ..db import get_db
 from ..deps import require_roles
 from ..models import AuthSession, Role, Staff, StaffStatus, new_id
 from ..schemas import staff_public
+from ..security import hash_password
 from ..utils import utcnow
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -24,6 +25,7 @@ class StaffCreate(BaseModel):
     staff_id: str | None = Field(default=None, max_length=40)
     role: Role
     department: str | None = Field(default=None, max_length=120)
+    password: str = Field(min_length=8, max_length=128)
 
     @field_validator("email")
     @classmethod
@@ -41,6 +43,7 @@ class StaffUpdate(BaseModel):
     role: Role | None = None
     department: str | None = Field(default=None, max_length=120)
     status: StaffStatus | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 def _active_super_admins(db: OrmSession, exclude_id: str | None = None) -> int:
@@ -102,6 +105,7 @@ def create_staff(
         role=payload.role,
         department=payload.department,
         status=StaffStatus.active,
+        password_hash=hash_password(payload.password),
     )
     db.add(person)
     db.commit()
@@ -164,8 +168,21 @@ def update_staff(
         changes["status"] = (person.status.value, payload.status.value)
         person.status = payload.status
 
+    password_reset = bool(payload.password)
+    if password_reset:
+        person.password_hash = hash_password(payload.password)
+
     person.updated_at = utcnow()
     db.commit()
+
+    if password_reset:
+        # A reset password ends every session opened with the old one.
+        db.execute(
+            update(AuthSession)
+            .where(AuthSession.staff_id == person.id, AuthSession.revoked_at.is_(None))
+            .values(revoked_at=utcnow())
+        )
+        db.commit()
 
     if next_status != StaffStatus.active:
         db.execute(
@@ -187,8 +204,12 @@ def update_staff(
         "role": "role",
         "status": "status",
     }
-    if action == "staff_updated" and changes:
-        summary = f"{person.full_name}: changed {', '.join(field_labels.get(key, key) for key in changes)}"
+    changed_labels = [field_labels.get(key, key) for key in changes]
+    if password_reset:
+        changed_labels.append("password")
+
+    if action == "staff_updated" and changed_labels:
+        summary = f"{person.full_name}: changed {', '.join(changed_labels)}"
     else:
         summary = f"{person.full_name}: {action.replace('staff_', '').replace('_', ' ')}"
 
@@ -199,6 +220,9 @@ def update_staff(
         entity_type="staff",
         entity_id=person.id,
         summary=summary,
-        meta={"changes": {key: {"from": value[0], "to": value[1]} for key, value in changes.items()}},
+        meta={
+            "changes": {key: {"from": value[0], "to": value[1]} for key, value in changes.items()},
+            "password_reset": password_reset,
+        },
     )
     return staff_public(person)

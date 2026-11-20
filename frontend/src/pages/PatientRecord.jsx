@@ -11,20 +11,24 @@ import {
   FlaskConical,
   Loader2,
   LogIn,
+  Paperclip,
   Phone,
   Pill,
   RefreshCw,
+  ScanLine,
   ShieldCheck,
   Stethoscope,
   X,
 } from "lucide-react";
 
 import AllergyModal from "../components/patients/AllergyModal";
+import AttachmentModal from "../components/patients/AttachmentModal";
 import CheckInModal from "../components/patients/CheckInModal";
 import ClinicalNoteModal from "../components/patients/ClinicalNoteModal";
 import DiagnosisModal from "../components/patients/DiagnosisModal";
 import LabRequestModal from "../components/patients/LabRequestModal";
 import PrescriptionModal from "../components/patients/PrescriptionModal";
+import ScanCardModal from "../components/patients/ScanCardModal";
 import Timeline from "../components/patients/Timeline";
 import VitalsModal from "../components/patients/VitalsModal";
 import { api } from "../lib/api";
@@ -33,6 +37,7 @@ import {
   billTypeLabel,
   canPrescribe,
   canRegister,
+  canScan,
   canWriteClinical,
   channelLabel,
   TIMELINE_FILTERS,
@@ -48,6 +53,7 @@ const MODALS = {
   prescription: PrescriptionModal,
   lab: LabRequestModal,
   allergy: AllergyModal,
+  attachment: AttachmentModal,
 };
 
 const ACTIONS = [
@@ -57,6 +63,7 @@ const ACTIONS = [
   { key: "prescription", label: "Prescription", hint: "Medicines for pharmacy", icon: Pill, permission: "prescribe" },
   { key: "lab", label: "Lab request", hint: "Send to laboratory", icon: FlaskConical, permission: "prescribe" },
   { key: "allergy", label: "Allergy", hint: "Red warning on record", icon: AlertTriangle, permission: "clinical" },
+  { key: "attachment", label: "Attachment", hint: "Scan or document", icon: Paperclip, permission: "clinical" },
 ];
 
 const EMPTY_HINTS = {
@@ -92,7 +99,9 @@ export default function PatientRecord() {
   const [tab, setTab] = useState("all");
   const [scope, setScope] = useState("visit");
   const [modal, setModal] = useState(null);
+  const [editingNote, setEditingNote] = useState(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [marking, setMarking] = useState(false);
 
   const load = useCallback(async () => {
@@ -148,8 +157,23 @@ export default function PatientRecord() {
 
   const saved = (message) => {
     setModal(null);
+    setEditingNote(null);
     setNotice(message);
     load();
+  };
+
+  const deleteNote = async (entry) => {
+    if (!window.confirm("Delete this clinical note? It is hidden from the record but kept for audit.")) {
+      return;
+    }
+    setError("");
+    try {
+      await api.delete(`/patients/${patient.id}/notes/${entry.id}`);
+      setNotice("Clinical note deleted. It is hidden from the record and kept for audit.");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const markAttended = async () => {
@@ -163,6 +187,26 @@ export default function PatientRecord() {
       setError(err.message);
     } finally {
       setMarking(false);
+    }
+  };
+
+  const applyScan = async (values) => {
+    const payload = {};
+    for (const [key, value] of Object.entries(values)) {
+      if (key === "card_number") payload.card_no = value;
+      else if (
+        ["age", "allergies", "first_name", "last_name", "other_name", "sex", "date_of_birth"].includes(key)
+      )
+        continue;
+      else payload[key] = value;
+    }
+    if (!Object.keys(payload).length) return;
+    try {
+      await api.patch(`/patients/${patient.id}`, payload);
+      setNotice("Card details added to the patient record.");
+      await load();
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -183,8 +227,15 @@ export default function PatientRecord() {
         <button type="button" className="btn-ghost px-2" onClick={() => navigate(-1)}>
           <ArrowLeft size={15} /> Back
         </button>
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-          {error || "Patient record could not be loaded."}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700"
+        >
+          <span className="flex-1">{error || "Patient record could not be loaded."}</span>
+          <button type="button" className="btn-secondary px-3 py-1.5 text-[12px]" onClick={load}>
+            <RefreshCw size={13} />
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -205,6 +256,12 @@ export default function PatientRecord() {
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
+          {canScan(staff?.role) && (
+            <button type="button" className="btn-secondary py-2 text-[12px]" onClick={() => setScanOpen(true)}>
+              <ScanLine size={14} />
+              Scan card
+            </button>
+          )}
           {canRegister(staff?.role) && (
             <button type="button" className="btn-secondary py-2 text-[12px]" onClick={() => setCheckInOpen(true)}>
               <LogIn size={14} />
@@ -319,7 +376,16 @@ export default function PatientRecord() {
               </label>
             </div>
           </div>
-          <Timeline entries={entries} emptyHint={EMPTY_HINTS[tab] || EMPTY_HINTS.all} />
+          <Timeline
+            entries={entries}
+            emptyHint={EMPTY_HINTS[tab] || EMPTY_HINTS.all}
+            canEditNote={allowed.clinical}
+            onEditNote={(entry) => {
+              setEditingNote(entry);
+              setModal("note");
+            }}
+            onDeleteNote={deleteNote}
+          />
         </section>
 
         {/* Right-hand menu */}
@@ -337,7 +403,10 @@ export default function PatientRecord() {
                     <button
                       key={action.key}
                       type="button"
-                      onClick={() => setModal(action.key)}
+                      onClick={() => {
+                        setEditingNote(null);
+                        setModal(action.key);
+                      }}
                       className="flex items-center gap-2.5 rounded-xl border border-line px-3 py-2 text-left transition-colors hover:border-forest-200 hover:bg-forest-50/60"
                     >
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-forest-50 text-forest-700">
@@ -457,15 +526,23 @@ export default function PatientRecord() {
       {ModalComponent && (
         <ModalComponent
           open={Boolean(modal)}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null);
+            setEditingNote(null);
+          }}
           patientId={patient.id}
           visitId={currentVisit?.id}
+          note={editingNote}
           onSaved={() =>
             saved(
               modal === "vitals"
                 ? "Vital signs saved to the record."
                 : modal === "note"
-                  ? "Clinical note saved to the record."
+                  ? editingNote
+                    ? "Clinical note updated. The previous version is kept in the record."
+                    : "Clinical note saved to the record."
+                  : modal === "attachment"
+                    ? "Attachment added to the record."
                   : modal === "prescription"
                     ? "Prescription saved and sent to the pharmacy queue."
                     : modal === "lab"
@@ -477,6 +554,13 @@ export default function PatientRecord() {
           }
         />
       )}
+
+      <ScanCardModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        patientId={patient.id}
+        onConfirm={applyScan}
+      />
 
       <CheckInModal
         open={checkInOpen}

@@ -10,6 +10,7 @@ export const NOTE_TYPES = {
 export const REGISTRAR_ROLES = ["super_admin", "doctor", "nurse", "records_officer"];
 export const CLINICAL_ROLES = ["super_admin", "doctor", "nurse"];
 export const PRESCRIBER_ROLES = ["super_admin", "doctor"];
+export const ATTENDING_ROLES = ["super_admin", "doctor"];
 
 export function canRegister(role) {
   return REGISTRAR_ROLES.includes(role);
@@ -21,6 +22,28 @@ export function canWriteClinical(role) {
 
 export function canPrescribe(role) {
   return PRESCRIBER_ROLES.includes(role);
+}
+
+export function canAttend(role) {
+  return ATTENDING_ROLES.includes(role);
+}
+
+export const LAB_ROLES = ["super_admin", "lab_scientist"];
+export const PHARMACY_ROLES = ["super_admin", "pharmacist"];
+
+export function canEnterLabResult(role) {
+  return LAB_ROLES.includes(role);
+}
+
+export function canDispense(role) {
+  return PHARMACY_ROLES.includes(role);
+}
+
+export const SCANNER_ROLES = ["super_admin", "doctor", "records_officer"];
+
+/** Card scanning is limited to the roles that register patients. */
+export function canScan(role) {
+  return SCANNER_ROLES.includes(role);
 }
 
 export const TIMELINE_FILTERS = [

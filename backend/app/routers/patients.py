@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as OrmSession
@@ -17,6 +18,7 @@ from ..models import (
     Clinic,
     Diagnosis,
     LabRequest,
+    LabResult,
     Patient,
     Prescription,
     PrescriptionItem,
@@ -46,6 +48,8 @@ router = APIRouter(prefix="/patients", tags=["patients"])
 registrar = require_roles(Role.super_admin, Role.doctor, Role.nurse, Role.records_officer)
 clinical_writer = require_roles(Role.super_admin, Role.doctor, Role.nurse)
 prescriber = require_roles(Role.super_admin, Role.doctor)
+lab_entrant = require_roles(Role.super_admin, Role.lab_scientist)
+dispenser = require_roles(Role.super_admin, Role.pharmacist)
 
 
 def _get_patient(db: OrmSession, patient_id: str) -> Patient:
@@ -131,6 +135,7 @@ def list_patients(
                 func.lower(func.coalesce(Patient.other_name, "")).like(term),
                 func.lower(Patient.patient_no).like(term),
                 func.lower(func.coalesce(Patient.nhis_no, "")).like(term),
+                func.lower(func.coalesce(Patient.card_no, "")).like(term),
                 func.lower(func.coalesce(Patient.phone, "")).like(term),
             )
         )
@@ -142,6 +147,69 @@ def list_patients(
     }
 
 
+@router.get("/duplicates")
+def duplicate_patients(
+    first_name: str | None = None,
+    last_name: str | None = None,
+    date_of_birth: str | None = None,
+    phone: str | None = None,
+    card_no: str | None = None,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(get_current_staff),
+) -> dict:
+    """Possible existing records for a new patient (same name + DOB/phone/card)."""
+    surname = (last_name or "").strip().lower()
+    given = (first_name or "").strip().lower()
+    dob = (date_of_birth or "").strip()
+    phone_digits = re.sub(r"\D", "", phone or "")
+    card = (card_no or "").strip().lower()
+
+    conditions = []
+    if surname:
+        conditions.append(func.lower(Patient.last_name) == surname)
+    if card:
+        conditions.append(
+            or_(
+                func.lower(Patient.patient_no) == card,
+                func.lower(func.coalesce(Patient.nhis_no, "")) == card,
+                func.lower(func.coalesce(Patient.card_no, "")) == card,
+            )
+        )
+    if phone_digits:
+        conditions.append(func.coalesce(Patient.phone, "").like(f"%{phone_digits[-9:]}"))
+    if not conditions:
+        return {"items": []}
+
+    candidates = db.scalars(
+        select(Patient).where(or_(*conditions)).order_by(Patient.created_at.desc()).limit(50)
+    ).all()
+
+    items = []
+    for patient in candidates:
+        matched_on = []
+        same_name = (
+            patient.last_name.strip().lower() == surname
+            and (not given or patient.first_name.strip().lower() == given)
+        )
+        if same_name and dob and patient.date_of_birth and patient.date_of_birth.isoformat() == dob:
+            matched_on.append("name and date of birth")
+        if phone_digits:
+            existing = re.sub(r"\D", "", patient.phone or "")
+            if existing and existing[-9:] == phone_digits[-9:]:
+                matched_on.append("phone number")
+        if card:
+            if card in (
+                (patient.patient_no or "").lower(),
+                (patient.nhis_no or "").lower(),
+                (patient.card_no or "").lower(),
+            ):
+                matched_on.append("card number")
+        if not matched_on:
+            continue
+        items.append({**patient_summary(patient), "matched_on": matched_on})
+    return {"items": items[:10]}
+
+
 class PatientCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=80)
     last_name: str = Field(min_length=1, max_length=80)
@@ -149,10 +217,16 @@ class PatientCreate(BaseModel):
     sex: str
     date_of_birth: date
     phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=255)
     address: str | None = Field(default=None, max_length=300)
     nhis_no: str | None = Field(default=None, max_length=40)
+    card_no: str | None = Field(default=None, max_length=40)
     blood_group: str | None = Field(default=None, max_length=10)
+    genotype: str | None = Field(default=None, max_length=10)
     next_of_kin: str | None = Field(default=None, max_length=160)
+    next_of_kin_phone: str | None = Field(default=None, max_length=40)
+    occupation: str | None = Field(default=None, max_length=120)
+    marital_status: str | None = Field(default=None, max_length=20)
     clinic_id: str | None = None
 
     check_in: bool = True
@@ -201,10 +275,16 @@ class PatientCreate(BaseModel):
 
 class PatientUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=255)
     address: str | None = Field(default=None, max_length=300)
     nhis_no: str | None = Field(default=None, max_length=40)
+    card_no: str | None = Field(default=None, max_length=40)
     blood_group: str | None = Field(default=None, max_length=10)
+    genotype: str | None = Field(default=None, max_length=10)
     next_of_kin: str | None = Field(default=None, max_length=160)
+    next_of_kin_phone: str | None = Field(default=None, max_length=40)
+    occupation: str | None = Field(default=None, max_length=120)
+    marital_status: str | None = Field(default=None, max_length=20)
     clinic_id: str | None = None
 
 
@@ -232,10 +312,16 @@ def create_patient(
         sex=payload.sex,
         date_of_birth=payload.date_of_birth,
         phone=(payload.phone or "").strip() or None,
+        email=(payload.email or "").strip() or None,
         address=(payload.address or "").strip() or None,
         nhis_no=(payload.nhis_no or "").strip() or None,
+        card_no=(payload.card_no or "").strip() or None,
         blood_group=payload.blood_group,
+        genotype=(payload.genotype or "").strip().upper() or None,
         next_of_kin=(payload.next_of_kin or "").strip() or None,
+        next_of_kin_phone=(payload.next_of_kin_phone or "").strip() or None,
+        occupation=(payload.occupation or "").strip() or None,
+        marital_status=(payload.marital_status or "").strip().lower() or None,
         clinic_id=clinic.id if clinic else None,
         registered_by_id=staff.id,
         registered_by_name=staff.full_name,
@@ -311,10 +397,16 @@ def update_patient(
 
     for field, label in (
         ("phone", "phone"),
+        ("email", "email"),
         ("address", "address"),
         ("nhis_no", "NHIS number"),
+        ("card_no", "card number"),
         ("blood_group", "blood group"),
+        ("genotype", "genotype"),
         ("next_of_kin", "next of kin"),
+        ("next_of_kin_phone", "next of kin phone"),
+        ("occupation", "occupation"),
+        ("marital_status", "marital status"),
     ):
         value = getattr(payload, field)
         if value is not None and value != getattr(patient, field):
@@ -367,9 +459,18 @@ def patient_detail(
     vitals = db.scalars(
         select(VitalSigns).where(VitalSigns.patient_id == patient.id).order_by(VitalSigns.recorded_at.desc())
     ).all()
-    notes = db.scalars(
-        select(ClinicalNote).where(ClinicalNote.patient_id == patient.id).order_by(ClinicalNote.created_at.desc())
+    note_rows = db.scalars(
+        select(ClinicalNote)
+        .where(ClinicalNote.patient_id == patient.id, ClinicalNote.is_deleted.is_(False))
+        .order_by(ClinicalNote.created_at.desc())
     ).all()
+    latest_notes: dict[str, ClinicalNote] = {}
+    for row in note_rows:
+        key = row.thread_id or row.id
+        current = latest_notes.get(key)
+        if current is None or (row.version or 1) > (current.version or 1):
+            latest_notes[key] = row
+    notes = sorted(latest_notes.values(), key=lambda row: row.created_at, reverse=True)
     diagnoses = db.scalars(
         select(Diagnosis).where(Diagnosis.patient_id == patient.id).order_by(Diagnosis.created_at.desc())
     ).all()
@@ -588,8 +689,11 @@ def add_note(
         )
     patient = _get_patient(db, patient_id)
     visit = _entry_visit(db, patient, payload.visit_id)
+    note_id = new_id()
     note = ClinicalNote(
-        id=new_id(),
+        id=note_id,
+        thread_id=note_id,
+        version=1,
         patient_id=patient.id,
         visit_id=visit.id if visit else None,
         note_type=payload.note_type if payload.note_type else "consultation",
@@ -612,6 +716,144 @@ def add_note(
         visit=visit,
     )
     return note_public(note)
+
+
+class NoteUpdate(BaseModel):
+    note_type: str | None = None
+    subjective: str | None = None
+    objective: str | None = None
+    assessment: str | None = None
+    plan: str | None = None
+
+
+def _note_thread(db: OrmSession, note: ClinicalNote) -> str:
+    return note.thread_id or note.id
+
+
+@router.patch("/{patient_id}/notes/{note_id}")
+def edit_note(
+    patient_id: str,
+    note_id: str,
+    payload: NoteUpdate,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(clinical_writer),
+) -> dict:
+    """Edits are appended as a new version; the previous version is kept."""
+    patient = _get_patient(db, patient_id)
+    note = db.get(ClinicalNote, note_id)
+    if note is None or note.patient_id != patient.id:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Clinical note not found."}
+        )
+    thread = _note_thread(db, note)
+    if not note.thread_id:
+        note.thread_id = thread
+
+    versions = db.scalars(select(ClinicalNote).where(ClinicalNote.thread_id == thread)).all()
+    next_version = max((row.version or 1) for row in versions) + 1
+
+    merged = {
+        "note_type": payload.note_type if payload.note_type is not None else note.note_type,
+        "subjective": payload.subjective if payload.subjective is not None else note.subjective,
+        "objective": payload.objective if payload.objective is not None else note.objective,
+        "assessment": payload.assessment if payload.assessment is not None else note.assessment,
+        "plan": payload.plan if payload.plan is not None else note.plan,
+    }
+    if not any(merged.values()):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "empty_note", "message": "Write at least one section of the note."},
+        )
+
+    revised = ClinicalNote(
+        id=new_id(),
+        thread_id=thread,
+        version=next_version,
+        patient_id=patient.id,
+        visit_id=note.visit_id,
+        note_type=merged["note_type"] or "consultation",
+        subjective=(merged["subjective"] or "").strip() or None,
+        objective=(merged["objective"] or "").strip() or None,
+        assessment=(merged["assessment"] or "").strip() or None,
+        plan=(merged["plan"] or "").strip() or None,
+        author_id=staff.id,
+        author_name=staff.full_name,
+    )
+    db.add(revised)
+    db.commit()
+    log_event(
+        db,
+        action="note_edited",
+        actor=staff,
+        entity_type="patient",
+        entity_id=patient.id,
+        patient_id=patient.id,
+        patient_name=patient_name(patient),
+        summary=f"Clinical note edited for {patient_name(patient)} (version {next_version})",
+        meta={"thread_id": thread, "version": next_version, "previous_id": note.id},
+        request=request,
+    )
+    return note_public(revised)
+
+
+@router.get("/{patient_id}/notes/{note_id}/versions")
+def note_versions(
+    patient_id: str,
+    note_id: str,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(get_current_staff),
+) -> dict:
+    patient = _get_patient(db, patient_id)
+    note = db.get(ClinicalNote, note_id)
+    if note is None or note.patient_id != patient.id:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Clinical note not found."}
+        )
+    thread = _note_thread(db, note)
+    rows = db.scalars(
+        select(ClinicalNote)
+        .where(ClinicalNote.thread_id == thread)
+        .order_by(ClinicalNote.version.desc())
+    ).all()
+    return {"items": [note_public(row) for row in rows]}
+
+
+@router.delete("/{patient_id}/notes/{note_id}")
+def delete_note(
+    patient_id: str,
+    note_id: str,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(clinical_writer),
+) -> dict:
+    """Hides the note from the record; the row and every version are kept."""
+    patient = _get_patient(db, patient_id)
+    note = db.get(ClinicalNote, note_id)
+    if note is None or note.patient_id != patient.id:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Clinical note not found."}
+        )
+    thread = _note_thread(db, note)
+    rows = db.scalars(select(ClinicalNote).where(ClinicalNote.thread_id == thread)).all()
+    for row in rows:
+        row.is_deleted = True
+    if not note.thread_id:
+        note.thread_id = thread
+    db.commit()
+    log_event(
+        db,
+        action="note_deleted",
+        actor=staff,
+        entity_type="patient",
+        entity_id=patient.id,
+        patient_id=patient.id,
+        patient_name=patient_name(patient),
+        summary=f"Clinical note hidden from the record of {patient_name(patient)}",
+        meta={"thread_id": thread, "versions": len(rows)},
+        request=request,
+    )
+    return {"ok": True, "thread_id": thread}
 
 
 class DiagnosisCreate(BaseModel):
@@ -716,6 +958,42 @@ def add_prescription(
     return prescription_public(prescription)
 
 
+@router.post("/{patient_id}/prescriptions/{prescription_id}/dispense")
+def dispense_prescription(
+    patient_id: str,
+    prescription_id: str,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(dispenser),
+) -> dict:
+    patient = _get_patient(db, patient_id)
+    prescription = db.get(Prescription, prescription_id)
+    if prescription is None or prescription.patient_id != patient.id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "Prescription not found."},
+        )
+    if prescription.status == "dispensed":
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "already_dispensed", "message": "This prescription was already dispensed."},
+        )
+    prescription.status = "dispensed"
+    db.commit()
+    _audit_entry(
+        db,
+        staff=staff,
+        patient=patient,
+        request=request,
+        action="prescription_dispensed",
+        summary=f"Dispensed prescription for {patient_name(patient)}: "
+        + ", ".join(item.drug_name for item in prescription.items),
+        visit=None,
+        meta={"prescription_id": prescription.id},
+    )
+    return prescription_public(prescription)
+
+
 class LabCreate(BaseModel):
     visit_id: str | None = None
     test_name: str = Field(min_length=2, max_length=200)
@@ -752,6 +1030,82 @@ def add_lab_request(
         action="lab_requested",
         summary=f"Lab request for {patient_name(patient)}: {lab.test_name}",
         visit=visit,
+    )
+    return lab_public(lab)
+
+
+class LabResultCreate(BaseModel):
+    analyte: str | None = Field(default=None, max_length=120)
+    result_value: str | None = Field(default=None, max_length=120)
+    unit: str | None = Field(default=None, max_length=40)
+    reference_range: str | None = Field(default=None, max_length=80)
+    interpretation: str = "normal"
+    notes: str | None = None
+    result_summary: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/{patient_id}/lab-requests/{lab_id}/results", status_code=201)
+def add_lab_result(
+    patient_id: str,
+    lab_id: str,
+    payload: LabResultCreate,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(lab_entrant),
+) -> dict:
+    patient = _get_patient(db, patient_id)
+    lab = db.get(LabRequest, lab_id)
+    if lab is None or lab.patient_id != patient.id:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Lab request not found."}
+        )
+    if not any((payload.analyte, payload.result_value, payload.notes, payload.result_summary)):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "empty_result", "message": "Enter the result before releasing it."},
+        )
+
+    interpretation = payload.interpretation if payload.interpretation in (
+        "normal",
+        "abnormal",
+        "critical",
+        "inconclusive",
+    ) else "normal"
+    result = LabResult(
+        id=new_id(),
+        lab_request_id=lab.id,
+        patient_id=patient.id,
+        analyte=(payload.analyte or "").strip() or None,
+        result_value=(payload.result_value or "").strip() or None,
+        unit=(payload.unit or "").strip() or None,
+        reference_range=(payload.reference_range or "").strip() or None,
+        interpretation=interpretation,
+        notes=(payload.notes or "").strip() or None,
+        status="released",
+        entered_by_id=staff.id,
+        entered_by_name=staff.full_name,
+    )
+    lab.results.append(result)
+    lab.status = "completed"
+    lab.result_summary = (payload.result_summary or "").strip() or " · ".join(
+        part
+        for part in (
+            (payload.analyte or "").strip(),
+            (payload.result_value or "").strip(),
+            (payload.unit or "").strip(),
+        )
+        if part
+    )
+    db.commit()
+    _audit_entry(
+        db,
+        staff=staff,
+        patient=patient,
+        request=request,
+        action="lab_result_entered",
+        summary=f"Lab result entered for {patient_name(patient)}: {lab.test_name}",
+        visit=None,
+        meta={"lab_request_id": lab.id, "interpretation": interpretation},
     )
     return lab_public(lab)
 
@@ -793,3 +1147,100 @@ def add_allergy(
         meta={"severity": allergy.severity},
     )
     return allergy_public(allergy)
+
+
+# ------------------------------------------------------------------ attachments
+
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+ALLOWED_ATTACHMENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+}
+
+
+@router.post("/{patient_id}/attachments", status_code=201)
+async def upload_attachment(
+    patient_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    description: str | None = Form(default=None),
+    kind: str = Form(default="document"),
+    visit_id: str | None = Form(default=None),
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(registrar),
+) -> dict:
+    patient = _get_patient(db, patient_id)
+    visit = _entry_visit(db, patient, visit_id) if visit_id else None
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "empty_file", "message": "That file is empty. Choose another file."},
+        )
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail={"code": "too_large", "message": "Attachments must be 10 MB or smaller."},
+        )
+    mime_type = (file.content_type or "").split(";")[0].strip().lower()
+    if mime_type and mime_type not in ALLOWED_ATTACHMENT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "unsupported_type",
+                "message": "Upload a JPG, PNG, WEBP or PDF document.",
+            },
+        )
+
+    attachment = Attachment(
+        id=new_id(),
+        patient_id=patient.id,
+        visit_id=visit.id if visit else None,
+        filename=(file.filename or "document")[:200],
+        kind=kind if kind in ("document", "image", "result", "consent") else "document",
+        description=(description or "").strip() or None,
+        mime_type=mime_type or "application/octet-stream",
+        size_bytes=len(data),
+        content=data,
+        uploaded_by_id=staff.id,
+        uploaded_by_name=staff.full_name,
+    )
+    db.add(attachment)
+    db.commit()
+    _audit_entry(
+        db,
+        staff=staff,
+        patient=patient,
+        request=request,
+        action="attachment_uploaded",
+        summary=f"Attachment added to {patient_name(patient)}: {attachment.filename}",
+        visit=visit,
+        meta={"attachment_id": attachment.id, "size_bytes": attachment.size_bytes},
+    )
+    return attachment_public(attachment)
+
+
+@router.get("/{patient_id}/attachments/{attachment_id}/download")
+def download_attachment(
+    patient_id: str,
+    attachment_id: str,
+    db: OrmSession = Depends(get_db),
+    staff: Staff = Depends(get_current_staff),
+) -> Response:
+    attachment = db.get(Attachment, attachment_id)
+    if attachment is None or attachment.patient_id != patient_id:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Attachment not found."}
+        )
+    safe_name = attachment.filename.replace('"', "").replace("\n", " ")
+    return Response(
+        content=attachment.content or b"",
+        media_type=attachment.mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Cache-Control": "private, no-store",
+        },
+    )

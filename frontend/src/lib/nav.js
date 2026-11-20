@@ -91,6 +91,16 @@ export function navForRole(role) {
   })).filter((section) => section.items.length > 0);
 }
 
+/** Roles allowed on a route, taken from the same table the sidebar renders. */
+export function rolesForPath(pathname) {
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (item.end ? pathname === item.to : pathname.startsWith(item.to)) return item.roles;
+    }
+  }
+  return null;
+}
+
 export function pageTitleFor(pathname) {
   if (pathname === "/settings") return "Settings";
   for (const section of NAV_SECTIONS) {

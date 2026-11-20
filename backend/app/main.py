@@ -8,7 +8,19 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .models import Role
-from .routers import audit, auth, dashboard, patients, reference, staff, worklist
+from .routers import (
+    audit,
+    auth,
+    dashboard,
+    messages,
+    ocr,
+    orders,
+    patients,
+    reference,
+    reports,
+    staff,
+    worklist,
+)
 from .security import AuthError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -66,3 +78,7 @@ app.include_router(audit.router, prefix="/api")
 app.include_router(patients.router, prefix="/api")
 app.include_router(worklist.router, prefix="/api")
 app.include_router(reference.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
+app.include_router(ocr.router, prefix="/api")
+app.include_router(orders.router, prefix="/api")
+app.include_router(messages.router, prefix="/api")

@@ -4,7 +4,19 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Enum as SAEnum,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -45,7 +57,7 @@ class Staff(Base):
     status: Mapped[StaffStatus] = mapped_column(
         SAEnum(StaffStatus, name="staff_status"), nullable=False, default=StaffStatus.active
     )
-    google_sub: Mapped[str | None] = mapped_column(String(120))
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -121,15 +133,23 @@ class Patient(Base):
     sex: Mapped[str] = mapped_column(String(10), nullable=False)
     date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(40))
+    email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(300))
     nhis_no: Mapped[str | None] = mapped_column(String(40), index=True)
+    card_no: Mapped[str | None] = mapped_column(String(40), index=True)
     blood_group: Mapped[str | None] = mapped_column(String(10))
+    genotype: Mapped[str | None] = mapped_column(String(10))
     next_of_kin: Mapped[str | None] = mapped_column(String(160))
+    next_of_kin_phone: Mapped[str | None] = mapped_column(String(40))
+    occupation: Mapped[str | None] = mapped_column(String(120))
+    marital_status: Mapped[str | None] = mapped_column(String(20))
     clinic_id: Mapped[str | None] = mapped_column(
         String(32), ForeignKey("clinics.id"), index=True
     )
     registered_by_id: Mapped[str | None] = mapped_column(String(32))
     registered_by_name: Mapped[str | None] = mapped_column(String(160))
+    # Seeded demonstration records. Cleared with `python -m app.setup --remove-demo`.
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -199,6 +219,11 @@ class ClinicalNote(Base):
     plan: Mapped[str | None] = mapped_column(Text)
     author_id: Mapped[str | None] = mapped_column(String(32))
     author_name: Mapped[str | None] = mapped_column(String(160))
+    # Every edit is stored as a new version; the previous versions are kept.
+    thread_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Deleting hides a note from the record but keeps the row and its versions.
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
@@ -262,6 +287,32 @@ class LabRequest(Base):
     requested_by_name: Mapped[str | None] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
+    results: Mapped[list[LabResult]] = relationship(
+        cascade="all, delete-orphan", order_by="LabResult.created_at", lazy="selectin"
+    )
+
+
+class LabResult(Base):
+    """One released laboratory result line against a lab request."""
+
+    __tablename__ = "lab_results"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    lab_request_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("lab_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    patient_id: Mapped[str] = mapped_column(String(32), ForeignKey("patients.id"), nullable=False, index=True)
+    analyte: Mapped[str | None] = mapped_column(String(120))
+    result_value: Mapped[str | None] = mapped_column(String(120))
+    unit: Mapped[str | None] = mapped_column(String(40))
+    reference_range: Mapped[str | None] = mapped_column(String(80))
+    interpretation: Mapped[str | None] = mapped_column(String(20))
+    notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="entered", nullable=False)
+    entered_by_id: Mapped[str | None] = mapped_column(String(32))
+    entered_by_name: Mapped[str | None] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
 
 class Allergy(Base):
     __tablename__ = "allergies"
@@ -285,6 +336,29 @@ class Attachment(Base):
     filename: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), default="document", nullable=False)
     description: Mapped[str | None] = mapped_column(String(300))
+    mime_type: Mapped[str | None] = mapped_column(String(120))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
     uploaded_by_id: Mapped[str | None] = mapped_column(String(32))
     uploaded_by_name: Mapped[str | None] = mapped_column(String(160))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Message(Base):
+    """Internal staff message. Every reply shares the thread of the first one."""
+
+    __tablename__ = "messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    subject: Mapped[str | None] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    sender_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    sender_name: Mapped[str | None] = mapped_column(String(160))
+    sender_role: Mapped[str | None] = mapped_column(String(40))
+    recipient_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    recipient_name: Mapped[str | None] = mapped_column(String(160))
+    patient_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    patient_name: Mapped[str | None] = mapped_column(String(160))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

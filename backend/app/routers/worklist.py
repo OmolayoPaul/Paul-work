@@ -16,6 +16,7 @@ from ..utils import iso, utcnow
 router = APIRouter(prefix="/worklist", tags=["worklist"])
 
 attending = require_roles(Role.super_admin, Role.doctor)
+worklist_reader = require_roles(Role.super_admin, Role.doctor, Role.nurse, Role.records_officer)
 
 
 def _day_start() -> datetime:
@@ -37,7 +38,7 @@ def worklist(
     search: str | None = None,
     visits_on: str = Query(default="today", pattern="^(today|all)$"),
     db: OrmSession = Depends(get_db),
-    staff: Staff = Depends(get_current_staff),
+    staff: Staff = Depends(worklist_reader),
 ) -> dict:
     base = select(Visit).join(Patient, Visit.patient_id == Patient.id).where(Visit.channel == channel)
     scoped = _scope(staff)
@@ -64,6 +65,7 @@ def worklist(
                 func.lower(Patient.last_name).like(term),
                 func.lower(func.coalesce(Patient.other_name, "")).like(term),
                 func.lower(func.coalesce(Patient.nhis_no, "")).like(term),
+                func.lower(func.coalesce(Patient.card_no, "")).like(term),
                 func.lower(func.coalesce(Patient.phone, "")).like(term),
             )
         )
@@ -82,6 +84,7 @@ def worklist(
                     "full_name": patient_name(visit.patient),
                     "sex": visit.patient.sex,
                     "age_display": f"{max((utcnow().date() - visit.patient.date_of_birth).days // 365, 0)}y",
+                    "is_demo": bool(visit.patient.is_demo),
                 },
             }
             for visit in rows

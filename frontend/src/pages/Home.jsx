@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertCircle,
   ArrowUpRight,
   BarChart3,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   FlaskConical,
   ListChecks,
   Pill,
+  RefreshCw,
   ScrollText,
   ShieldCheck,
   Stethoscope,
@@ -71,17 +73,29 @@ const QUICK_ACTIONS = {
 export default function Home() {
   const { staff } = useAuth();
   const [summary, setSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setSummaryError("");
+    setSummaryLoading(true);
     api
       .get("/dashboard/summary")
       .then((data) => active && setSummary(data))
-      .catch(() => {});
+      .catch((err) => {
+        if (active) setSummaryError(err.message);
+      })
+      .finally(() => {
+        if (active) setSummaryLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, []);
+  }, [revision]);
+
+  const stat = (value) => (summaryLoading ? "—" : value ?? 0);
 
   if (!staff) return null;
 
@@ -110,6 +124,24 @@ export default function Home() {
           Auto sign-out after {staff.idle_timeout_minutes ?? 15} min idle
         </span>
       </header>
+
+      {summaryError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800"
+        >
+          <AlertCircle size={16} className="shrink-0" />
+          <span className="flex-1">Today's counters could not be loaded. {summaryError}</span>
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1.5 text-[12px]"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            <RefreshCw size={13} />
+            Retry
+          </button>
+        </div>
+      )}
 
       <section className="relative overflow-hidden rounded-3xl bg-forest-900 p-6 text-white shadow-lift sm:p-8">
         <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full border border-white/10" />
@@ -145,9 +177,9 @@ export default function Home() {
 
         <dl className="relative mt-7 grid max-w-2xl grid-cols-3 gap-4 border-t border-white/10 pt-5">
           {[
-            { label: "Waiting", value: summary?.patients_waiting_today ?? 0 },
-            { label: "Attended", value: summary?.attended_today ?? 0 },
-            { label: "Lab pending", value: summary?.pending_lab_results ?? 0 },
+            { label: "Waiting", value: stat(summary?.patients_waiting_today) },
+            { label: "Attended", value: stat(summary?.attended_today) },
+            { label: "Lab pending", value: stat(summary?.pending_lab_results) },
           ].map((item) => (
             <div key={item.label}>
               <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
@@ -163,20 +195,20 @@ export default function Home() {
         <StatCard
           icon={Users}
           label="Patients waiting today"
-          value={summary?.patients_waiting_today ?? 0}
+          value={stat(summary?.patients_waiting_today)}
           hint="Checked in, not yet attended"
         />
         <StatCard
           icon={CheckCircle2}
           label="Attended today"
-          value={summary?.attended_today ?? 0}
+          value={stat(summary?.attended_today)}
           hint="Consultations completed"
           tone="accent"
         />
         <StatCard
           icon={FlaskConical}
           label="Pending lab results"
-          value={summary?.pending_lab_results ?? 0}
+          value={stat(summary?.pending_lab_results)}
           hint="Awaiting the laboratory"
           tone="amber"
         />
@@ -184,7 +216,7 @@ export default function Home() {
           <StatCard
             icon={UserCog}
             label="Active staff"
-            value={summary?.staff_total ?? 0}
+            value={stat(summary?.staff_total)}
             hint={
               summary
                 ? `${summary.staff_inactive ?? 0} deactivated · ${roleCounts.doctor ?? 0} doctors`
@@ -196,7 +228,7 @@ export default function Home() {
           <StatCard
             icon={Pill}
             label="Open prescriptions"
-            value={summary?.open_prescriptions ?? 0}
+            value={stat(summary?.open_prescriptions)}
             hint="Waiting to be dispensed"
             tone="slate"
           />
@@ -239,7 +271,7 @@ export default function Home() {
               <h2 className="text-[15px] font-bold tracking-tight text-ink">Team</h2>
               <p className="mt-1 text-[11.5px] text-ink-muted">Staff accounts across the hospital</p>
               <div className="mt-4 flex items-end gap-2">
-                <span className="text-3xl font-bold tracking-tight text-ink">{summary?.staff_total ?? 0}</span>
+                <span className="text-3xl font-bold tracking-tight text-ink">{stat(summary?.staff_total)}</span>
                 <span className="pb-1 text-[11.5px] text-ink-muted">active</span>
               </div>
               <div className="mt-4 space-y-2">

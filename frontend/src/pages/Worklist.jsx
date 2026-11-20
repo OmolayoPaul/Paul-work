@@ -132,6 +132,14 @@ export default function Worklist() {
           <span className="flex-1">{error}</span>
           <button
             type="button"
+            className="btn-secondary px-2.5 py-1 text-[11.5px]"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
+          <button
+            type="button"
             className="rounded-md p-0.5 hover:bg-white/60"
             onClick={() => setError("")}
             aria-label="Dismiss error"
@@ -236,6 +244,11 @@ export default function Worklist() {
                 >
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-[11.5px] font-medium text-forest-800">
                     {row.patient.patient_no}
+                    {row.patient.is_demo && (
+                      <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 font-sans text-[9.5px] font-semibold uppercase tracking-wide text-amber-700">
+                        Demo
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-semibold text-ink">{row.patient.last_name}</td>
                   <td className="px-4 py-3 text-ink-soft">{row.patient.first_name}</td>

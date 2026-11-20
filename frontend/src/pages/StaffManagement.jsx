@@ -5,6 +5,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   UserCheck,
@@ -116,8 +117,8 @@ export default function StaffManagement() {
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink sm:text-[28px]">Staff Management</h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-            Create staff accounts, assign roles and switch access on or off. A Google account that is not on
-            this list cannot sign in.
+            Create staff accounts, assign roles and switch access on or off. Only people on this list can
+            sign in.
           </p>
         </div>
         <button
@@ -152,6 +153,14 @@ export default function StaffManagement() {
         >
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            className="btn-secondary px-2.5 py-1 text-[11.5px]"
+            onClick={reload}
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
           <button
             type="button"
             className="rounded-md p-0.5 hover:bg-white/60"
@@ -327,7 +336,7 @@ export default function StaffManagement() {
             <p className="mx-auto mt-1 max-w-sm text-[12.5px] leading-relaxed text-ink-muted">
               {filtersActive
                 ? "Try a different name, role or status."
-                : "Add the first staff member to let them sign in with Google."}
+                : "Add the first staff member to give them a sign-in."}
             </p>
             {filtersActive && (
               <button type="button" className="btn-secondary mt-4" onClick={() => setFilters(EMPTY_FILTERS)}>

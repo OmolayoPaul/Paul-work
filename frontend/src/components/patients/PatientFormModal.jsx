@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Loader2, UserPlus } from "lucide-react";
+import { AlertCircle, Loader2, ScanLine, UserPlus } from "lucide-react";
 
 import Modal from "../Modal";
+import ScanCardModal from "./ScanCardModal";
 import { api } from "../../lib/api";
-import { BILL_TYPES, CHANNELS, VISIT_TYPES } from "../../lib/clinical";
+import { useAuth } from "../../lib/auth";
+import { BILL_TYPES, CHANNELS, VISIT_TYPES, canScan } from "../../lib/clinical";
 
 const EMPTY = {
   first_name: "",
@@ -12,9 +14,15 @@ const EMPTY = {
   sex: "female",
   date_of_birth: "",
   phone: "",
+  email: "",
   nhis_no: "",
+  card_no: "",
   blood_group: "",
+  genotype: "",
   next_of_kin: "",
+  next_of_kin_phone: "",
+  occupation: "",
+  marital_status: "",
   address: "",
   clinic_id: "",
   visit_type: "new",
@@ -26,10 +34,13 @@ const EMPTY = {
 };
 
 export default function PatientFormModal({ open, onClose, onSaved }) {
+  const { staff } = useAuth();
   const [form, setForm] = useState(EMPTY);
   const [reference, setReference] = useState({ clinics: [], doctors: [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
+  const scanner = canScan(staff?.role);
 
   const loadReference = useCallback(async () => {
     try {
@@ -65,9 +76,15 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
         sex: form.sex,
         date_of_birth: form.date_of_birth,
         phone: form.phone || null,
+        email: form.email || null,
         nhis_no: form.nhis_no || null,
+        card_no: form.card_no || null,
         blood_group: form.blood_group || null,
+        genotype: form.genotype || null,
         next_of_kin: form.next_of_kin || null,
+        next_of_kin_phone: form.next_of_kin_phone || null,
+        occupation: form.occupation || null,
+        marital_status: form.marital_status || null,
         address: form.address || null,
         clinic_id: form.clinic_id || null,
         check_in: form.check_in,
@@ -110,6 +127,21 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
           <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
             <AlertCircle size={15} className="mt-0.5 shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {scanner && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-forest-100 bg-forest-50/70 px-3 py-2">
+            <p className="text-[12px] text-forest-900">
+              Have the patient&apos;s card? Scan it to fill this form.
+            </p>
+            <button
+              type="button"
+              className="btn-secondary px-3 py-1.5 text-[12px]"
+              onClick={() => setScanOpen(true)}
+            >
+              <ScanLine size={14} /> Scan card
+            </button>
           </div>
         )}
 
@@ -156,16 +188,52 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
               </select>
             </label>
             <label className="block">
+              <span className="label">Genotype</span>
+              <select className="input mt-1" value={form.genotype} onChange={setField("genotype")}>
+                <option value="">Unknown</option>
+                {["AA", "AS", "AC", "SS", "SC"].map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
               <span className="label">Phone</span>
               <input className="input mt-1" value={form.phone} onChange={setField("phone")} placeholder="0803 000 0000" />
+            </label>
+            <label className="block">
+              <span className="label">Email</span>
+              <input type="email" className="input mt-1" value={form.email} onChange={setField("email")} />
             </label>
             <label className="block">
               <span className="label">NHIS number</span>
               <input className="input mt-1" value={form.nhis_no} onChange={setField("nhis_no")} />
             </label>
             <label className="block">
+              <span className="label">Card number</span>
+              <input className="input mt-1" value={form.card_no} onChange={setField("card_no")} />
+            </label>
+            <label className="block">
               <span className="label">Next of kin</span>
               <input className="input mt-1" value={form.next_of_kin} onChange={setField("next_of_kin")} />
+            </label>
+            <label className="block">
+              <span className="label">Next of kin phone</span>
+              <input className="input mt-1" value={form.next_of_kin_phone} onChange={setField("next_of_kin_phone")} />
+            </label>
+            <label className="block">
+              <span className="label">Occupation</span>
+              <input className="input mt-1" value={form.occupation} onChange={setField("occupation")} />
+            </label>
+            <label className="block">
+              <span className="label">Marital status</span>
+              <select className="input mt-1" value={form.marital_status} onChange={setField("marital_status")}>
+                <option value="">Unknown</option>
+                {["single", "married", "divorced", "widowed"].map((value) => (
+                  <option key={value} value={value}>
+                    {value.charAt(0).toUpperCase() + value.slice(1)}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block sm:col-span-3">
               <span className="label">Address</span>
@@ -243,6 +311,20 @@ export default function PatientFormModal({ open, onClose, onSaved }) {
           </div>
         </fieldset>
       </form>
+
+      <ScanCardModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onConfirm={(values) => {
+          const next = {};
+          for (const [key, value] of Object.entries(values)) {
+            if (key === "card_number") next.card_no = value;
+            else if (key === "age" || key === "allergies") continue;
+            else next[key] = value;
+          }
+          setForm((current) => ({ ...current, ...next }));
+        }}
+      />
     </Modal>
   );
 }

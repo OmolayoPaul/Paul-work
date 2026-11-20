@@ -64,8 +64,19 @@ export default function Patients() {
       </header>
 
       {error && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-          {error}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700"
+        >
+          <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1.5 text-[12px]"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            <RefreshCw size={13} />
+            Retry
+          </button>
         </div>
       )}
 
@@ -116,7 +127,14 @@ export default function Patients() {
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-[11.5px] font-medium text-forest-800">
                     {patient.patient_no}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-ink">{patient.full_name}</td>
+                  <td className="px-4 py-3 font-semibold text-ink">
+                    {patient.full_name}
+                    {patient.is_demo && (
+                      <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-amber-700">
+                        Demo
+                      </span>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
                     {patient.sex_label} · {patient.age_display}
                   </td>

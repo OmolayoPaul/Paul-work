@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import Logo from "./components/Logo";
 import { useAuth } from "./lib/auth";
+import { rolesForPath } from "./lib/nav";
 import AuditLog from "./pages/AuditLog";
 import Consultations from "./pages/Consultations";
 import Home from "./pages/Home";
@@ -46,6 +47,13 @@ function RequireRole({ roles, children }) {
   return children;
 }
 
+/** Applies the same role rules as the sidebar, so a direct URL is refused too. */
+function RoleGuard({ path, children }) {
+  const roles = rolesForPath(path);
+  if (!roles) return children;
+  return <RequireRole roles={roles}>{children}</RequireRole>;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -58,28 +66,84 @@ export default function App() {
         }
       >
         <Route index element={<Home />} />
-        <Route path="worklist" element={<Worklist />} />
-        <Route path="patients" element={<Patients />} />
-        <Route path="patients/:patientId" element={<PatientRecord />} />
-        <Route path="consultations" element={<Consultations />} />
-        <Route path="orders" element={<Orders />} />
-        <Route path="records" element={<Records />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="reports" element={<Reports />} />
+        <Route
+          path="worklist"
+          element={
+            <RoleGuard path="/worklist">
+              <Worklist />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="patients"
+          element={
+            <RoleGuard path="/patients">
+              <Patients />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="patients/:patientId"
+          element={
+            <RoleGuard path="/patients">
+              <PatientRecord />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="consultations"
+          element={
+            <RoleGuard path="/consultations">
+              <Consultations />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="orders"
+          element={
+            <RoleGuard path="/orders">
+              <Orders />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="records"
+          element={
+            <RoleGuard path="/records">
+              <Records />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="messages"
+          element={
+            <RoleGuard path="/messages">
+              <Messages />
+            </RoleGuard>
+          }
+        />
+        <Route
+          path="reports"
+          element={
+            <RoleGuard path="/reports">
+              <Reports />
+            </RoleGuard>
+          }
+        />
         <Route
           path="staff"
           element={
-            <RequireRole roles={["super_admin"]}>
+            <RoleGuard path="/staff">
               <StaffManagement />
-            </RequireRole>
+            </RoleGuard>
           }
         />
         <Route
           path="audit"
           element={
-            <RequireRole roles={["super_admin"]}>
+            <RoleGuard path="/audit">
               <AuditLog />
-            </RequireRole>
+            </RoleGuard>
           }
         />
         <Route path="settings" element={<Settings />} />
