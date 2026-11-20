@@ -18,7 +18,16 @@ super_admin_only = require_roles(Role.super_admin)
 CATEGORIES: dict[str, tuple[str, ...]] = {
     "sign_in": ("login", "logout"),
     "staff": ("staff_",),
-    "patient": ("patient_",),
+    "patient": (
+        "patient_",
+        "visit_",
+        "vitals_",
+        "note_",
+        "diagnosis_",
+        "prescription_",
+        "lab_",
+        "allergy_",
+    ),
     "scan": ("ocr_",),
 }
 

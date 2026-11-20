@@ -67,9 +67,35 @@ Any Google account that is not in the staff list is refused with
   `lab_scientist`, `admin_staff`. Only the super admin can manage staff.
 - Audit events are append-only; the API exposes no update or delete path.
 
+## Clinical modules
+
+- **Worklist** (`/worklist`) — checked-in patients with patient number, name,
+  clinic, bill type, assigned doctor and check-in time. Pending / Attended To
+  toggle, Hospital Visit / Telemed Visit tabs, and search by card number, name,
+  NHIS number or phone. Records officers, nurses and doctors can register and
+  check patients in; doctors see their own patients plus unassigned arrivals.
+- **Patient register** (`/patients`) — every registered patient, searchable by
+  patient number, name, NHIS number or phone.
+- **Patient medical record** (`/patients/:id`) — header with age/sex, patient ID,
+  visit type, clinic and a red allergies badge; filter tabs (View All, Vital
+  Signs, Treatment Plan, Prescription, Investigations, Lab, Others); newest-first
+  clinical timeline; right-hand menu to record vitals, clinical notes,
+  diagnoses, prescriptions (with line items), lab requests and allergies.
+- **Data types** — Patient, Visit, VitalSigns, ClinicalNote, Diagnosis,
+  Prescription + PrescriptionItem, LabRequest, Allergy, Attachment, Clinic.
+
+Registration is limited to super admin, doctor, nurse and records officer.
+Clinical entries are written by doctors and nurses; diagnoses, prescriptions and
+lab requests are doctor-only. Every registration, check-in, record opening and
+clinical entry is appended to the audit log.
+
+In preview mode the setup service seeds five clinics and six demo patients with
+visits, vitals, a clinical note, a diagnosis, a prescription and lab requests so
+the worklist and record can be reviewed without typing data.
+
 ## Status
 
-Prompt 1 of the build plan is in place: shell, branding, Google/preview sign-in,
-roles, audit foundation, and the page shells for the clinical modules. The
-clinical modules (worklist, patient record, OCR capture, orders, reports) are
+Prompts 1–3 of the build plan are in place: shell, branding, sign-in and roles;
+staff management and audit log; worklist, patient register and the patient
+medical record. OCR patient capture, orders, reports and dashboard analytics are
 next.

@@ -5,8 +5,9 @@
 - `docker-compose.base44.yml` runs everything from the cloned source:
   - `web` = Vite dev server on host port 3000, proxying `/api` → `http://api:8000`.
   - `api` = uvicorn with `--reload` on the bind-mounted `backend/`.
-  - `setup` = one-shot `python -m app.setup` (creates tables, seeds accounts);
-    `api` waits for it with `service_completed_successfully`.
+  - `setup` = one-shot `python -m app.setup` (creates tables, seeds accounts,
+    clinics and preview demo patients); `api` waits for it with
+    `service_completed_successfully`.
   - `db` = PostgreSQL 16 with a named volume.
 - Because the frontend and API share one origin, session cookies are first-party.
   Do not expose the API on its own public port.
@@ -29,6 +30,15 @@
   `backend/app/models.py`, re-run it:
   `docker compose -f docker-compose.base44.yml run --rm setup`
   (there is no migration tool yet; `create_all` only adds new tables).
+- Demo patients are seeded only when `patients` is empty and
+  `BASE44_PREVIEW_MODE=1`. To reseed the demo worklist, delete the demo
+  `patients` rows (cascades are not configured; remove their visits and clinical
+  entries too) and re-run `setup`.
+- Clinical writes are role-gated in `backend/app/routers/patients.py`:
+  registration = super admin / doctor / nurse / records officer; vitals, notes
+  and allergies = super admin / doctor / nurse; diagnoses, prescriptions and lab
+  requests = super admin / doctor. Doctors only see visits assigned to them or
+  unassigned ones on the worklist (`routers/worklist.py`).
 - The preview host arrives as `<port>-<sandbox id>.$BASE44_SANDBOX_HOST_DOMAIN`;
   `frontend/vite.config.js` adds `.<BASE44_SANDBOX_HOST_DOMAIN>` to
   `allowedHosts` only when `BASE44_PREVIEW_MODE === "1"`.
@@ -46,3 +56,8 @@ docker compose -f docker-compose.base44.yml ps
 Sign-in is Google-only, so automated checks can use the preview account picker
 when `BASE44_PREVIEW_MODE=1`; production behaviour must be verified with a real
 Google account on the staff list.
+
+Clinical flows to check after touching the patient modules: worklist pending /
+attended toggle, opening a row into the record, adding a vital sign and a
+clinical note (both should appear in the timeline and in the audit log), and
+registering + checking in a patient from `/worklist`.

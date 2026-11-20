@@ -10,6 +10,14 @@ export const AUDIT_ACTION_LABELS = {
   patient_viewed: "Patient record opened",
   patient_created: "Patient registered",
   patient_updated: "Patient record changed",
+  visit_checked_in: "Patient checked in",
+  visit_attended: "Consultation attended",
+  vitals_recorded: "Vital signs recorded",
+  note_added: "Clinical note added",
+  diagnosis_recorded: "Diagnosis recorded",
+  prescription_recorded: "Prescription written",
+  lab_requested: "Lab test requested",
+  allergy_recorded: "Allergy recorded",
   ocr_scan: "Card scan",
 };
 
@@ -32,9 +40,20 @@ export function auditActionLabel(action = "") {
   return AUDIT_ACTION_LABELS[action] || action.replace(/_/g, " ") || "Activity";
 }
 
+const PATIENT_PREFIXES = [
+  "patient_",
+  "visit_",
+  "vitals_",
+  "note_",
+  "diagnosis_",
+  "prescription_",
+  "lab_",
+  "allergy_",
+];
+
 export function auditTone(action = "") {
   if (action.startsWith("staff_")) return TONES.staff;
-  if (action.startsWith("patient_")) return TONES.patient;
+  if (PATIENT_PREFIXES.some((prefix) => action.startsWith(prefix))) return TONES.patient;
   if (action.startsWith("ocr_")) return TONES.scan;
   return TONES.sign_in;
 }

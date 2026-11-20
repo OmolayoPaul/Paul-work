@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import Orders from "./pages/Orders";
+import PatientRecord from "./pages/PatientRecord";
 import Patients from "./pages/Patients";
 import Records from "./pages/Records";
 import Reports from "./pages/Reports";
@@ -59,6 +60,7 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="worklist" element={<Worklist />} />
         <Route path="patients" element={<Patients />} />
+        <Route path="patients/:patientId" element={<PatientRecord />} />
         <Route path="consultations" element={<Consultations />} />
         <Route path="orders" element={<Orders />} />
         <Route path="records" element={<Records />} />
