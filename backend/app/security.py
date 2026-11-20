@@ -24,6 +24,34 @@ class AuthError(Exception):
         self.status = status
 
 
+PASSWORD_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 240_000
+
+
+def hash_password(password: str) -> str:
+    """Hash a staff password with a per-account salt (stdlib PBKDF2, no deps)."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), PASSWORD_ITERATIONS
+    ).hex()
+    return f"{PASSWORD_ALGORITHM}${PASSWORD_ITERATIONS}${salt}${digest}"
+
+
+def verify_password(password: str, stored: str | None) -> bool:
+    if not stored:
+        return False
+    try:
+        algorithm, iterations, salt, digest = stored.split("$")
+        if algorithm != PASSWORD_ALGORITHM:
+            return False
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), int(iterations)
+        ).hex()
+    except (ValueError, TypeError):
+        return False
+    return secrets.compare_digest(candidate, digest)
+
+
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 

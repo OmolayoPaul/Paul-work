@@ -2,8 +2,8 @@
 
 Electronic Medical Records for hospitals and clinics in Nigeria.
 
-A closed clinical workspace: Google-only sign-in, staff accounts created by a
-super admin, role-based access, and an append-only audit trail.
+A closed clinical workspace: email + password sign-in, staff accounts created by
+a super admin, role-based access, and an append-only audit trail.
 
 ## Stack
 
@@ -12,7 +12,7 @@ super admin, role-based access, and an append-only audit trail.
 | Frontend | React 18 + Vite + Tailwind CSS                |
 | Backend  | FastAPI + SQLAlchemy 2                        |
 | Database | PostgreSQL 16                                 |
-| Auth     | Google Identity Services → httpOnly session cookie |
+| Auth     | Email + password (PBKDF2-SHA256) → httpOnly session cookie |
 
 Single origin: the Vite dev server serves the app on port 3000 and proxies
 `/api` to the FastAPI service, so session cookies stay first-party.
@@ -35,13 +35,27 @@ docker compose -f docker-compose.base44.yml exec -T api python -m app.setup
 
 ## Sign-in
 
-Production sign-in is **Google only**. Set `GOOGLE_CLIENT_ID` to a Google OAuth
-Web Client ID whose authorised JavaScript origins include the app origin.
+Staff sign in with the email and password on their staff account. There is no
+public sign-up: a super admin creates the account with a first password, and the
+staff member can change it from Settings.
+
+Passwords are stored as salted PBKDF2-SHA256 hashes (`backend/app/security.py`).
+Resetting someone's password ends their other sessions.
+
+The first super admin is seeded by the `setup` service from `SUPER_ADMIN_EMAIL`
+and `SUPER_ADMIN_PASSWORD`. When no password is configured, a random one is
+generated and printed once by setup:
+
+```bash
+docker compose -f docker-compose.base44.yml logs setup
+```
 
 When `BASE44_PREVIEW_MODE=1` (sandbox previews only) the login screen also
 offers a **preview sign-in** picker with seeded staff accounts, one per role, so
-each role's workspace can be reviewed without a Google client. That endpoint
-returns 404 whenever the flag is not exactly `1`.
+each role's workspace can be reviewed without typing a password. Those seeded
+accounts share the first password `Afridetect2026!` (printed by setup), so the
+normal form can be exercised too. The picker endpoints return 404 whenever the
+flag is not exactly `1`.
 
 Seeded accounts:
 
@@ -55,11 +69,13 @@ Seeded accounts:
 | Lab scientist   | `lab@afridetect.ng`    |
 | Admin staff     | `frontdesk@afridetect.ng` |
 
-Any Google account that is not in the staff list is refused with
-"Your account has not been created. Contact your administrator."
+An email that is not on the staff list cannot sign in; the form always answers
+"Email or password is incorrect."
 
 ## Security model
 
+- Passwords are salted PBKDF2-SHA256 hashes; only a super admin can reset
+  someone else's password, and every staff member can change their own.
 - Opaque session tokens stored as SHA-256 hashes; httpOnly, SameSite=Lax cookie.
 - 15 minutes of inactivity ends the session on the server, and the browser shows
   a 60-second warning first.

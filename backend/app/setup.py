@@ -8,6 +8,7 @@ Runs as its own compose service before the API starts:
 
 from __future__ import annotations
 
+import secrets
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -32,7 +33,11 @@ from .models import (
     VitalSigns,
     new_id,
 )
+from .security import hash_password
 from .utils import utcnow
+
+# Shared first password for the seeded preview accounts. Preview mode only.
+PREVIEW_STAFF_PASSWORD = "Afridetect2026!"
 
 DEMO_STAFF = [
     ("Dr. Chinedu Okafor", "doctor@afridetect.ng", Role.doctor, "General Outpatient", "AFD-D-001"),
@@ -60,6 +65,7 @@ COLUMN_MIGRATIONS = [
     ("patients", "occupation", "VARCHAR(120)"),
     ("patients", "marital_status", "VARCHAR(20)"),
     ("patients", "is_demo", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("staff", "password_hash", "VARCHAR(255)"),
 ]
 
 # Fictional people only. Every one is flagged is_demo so it can be removed.
@@ -179,6 +185,15 @@ def ensure_staff(db, *, full_name: str, email: str, role: Role, department: str,
     db.add(person)
     db.commit()
     return person
+
+
+def set_initial_password(db, person: Staff, password: str) -> bool:
+    """Give an account its first password. An existing password is never replaced."""
+    if person.password_hash:
+        return False
+    person.password_hash = hash_password(password)
+    db.commit()
+    return True
 
 
 def ensure_clinic(db, name: str, code: str) -> Clinic:
@@ -526,6 +541,16 @@ def main() -> None:
         )
         print(f"super admin ready: {admin.email}")
 
+        initial_password = settings.super_admin_password.strip()
+        generated = not initial_password
+        if generated:
+            initial_password = secrets.token_urlsafe(9)
+        if set_initial_password(db, admin, initial_password):
+            if generated:
+                print(f"generated super admin password: {initial_password} (change it after signing in)")
+            else:
+                print("super admin password set from SUPER_ADMIN_PASSWORD")
+
         for name, code in CLINICS:
             ensure_clinic(db, name, code)
         print(f"{len(CLINICS)} clinics ready")
@@ -546,7 +571,9 @@ def main() -> None:
                     doctor = person
                 if role == Role.nurse:
                     nurse = person
+                set_initial_password(db, person, PREVIEW_STAFF_PASSWORD)
                 print(f"preview account ready: {person.email} ({person.role.value})")
+            print(f"preview staff password: {PREVIEW_STAFF_PASSWORD}")
             if doctor is not None:
                 ensure_demo_patients(db, doctor, nurse)
         else:

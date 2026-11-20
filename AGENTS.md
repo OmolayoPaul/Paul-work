@@ -14,9 +14,9 @@
 
 ## Environment
 
-- `.env.base44-defaults` holds committed placeholders (super admin email,
-  session timings, empty `GOOGLE_CLIENT_ID`). `/run/base44/app.env` is listed
-  last in `env_file:` so dashboard values override the placeholders.
+- `.env.base44-defaults` holds committed placeholders (super admin email and
+  first password, session timings). `/run/base44/app.env` is listed last in
+  `env_file:` so dashboard values override the placeholders.
 - `BASE44_PREVIEW_MODE` is passed through to `api` and `web`; only the exact
   string `1` enables preview-only behaviour:
   - `POST /api/auth/dev-login` and `GET /api/auth/dev-accounts`
@@ -44,6 +44,12 @@
   `/api/reports/export/{patients-per-day|patients-per-clinic|top-diagnoses}.csv`.
   Only super admin, doctor and admin staff may call them. CSV export always
   returns a file — headings only when the period is empty.
+- Sign-in is email + password: `POST /api/auth/login` verifies the PBKDF2 hash
+  in `app/security.py`. A staff account needs a password before it can sign in —
+  `POST /api/staff` requires one, `PATCH /api/staff/{id}` accepts `password` for
+  a reset (which revokes that person's sessions), and `POST /api/auth/password`
+  changes your own. `setup.py` sets a first password only when the account has
+  none, so a changed password survives restarts.
 - Route permissions are defined once in `frontend/src/lib/nav.js`
   (`NAV_SECTIONS[].items[].roles`); `App.jsx` wraps every page in `RoleGuard`,
   which reads the same table, so a direct URL cannot reach a page the sidebar
@@ -73,9 +79,11 @@ curl -s -b /tmp/jar "localhost:3000/api/reports/summary?days=30"
 curl -s -b /tmp/jar -D - "localhost:3000/api/reports/export/top-diagnoses?days=30"
 ```
 
-Sign-in is Google-only, so automated checks can use the preview account picker
-when `BASE44_PREVIEW_MODE=1`; production behaviour must be verified with a real
-Google account on the staff list.
+Sign-in is email + password. The seeded super admin uses `SUPER_ADMIN_EMAIL`
+with `SUPER_ADMIN_PASSWORD` from `.env.base44-defaults` (the setup service only
+applies it while the account has no password). Automated checks can also use the
+preview account picker when `BASE44_PREVIEW_MODE=1`; the seeded preview staff
+share the first password `Afridetect2026!`.
 
 Clinical flows to check after touching the patient modules: worklist pending /
 attended toggle, opening a row into the record, adding a vital sign and a

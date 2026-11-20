@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Loader2, LogIn, Sparkles } from "lucide-react";
 
 import LoginArtwork from "../components/LoginArtwork";
 import Logo from "../components/Logo";
@@ -21,10 +21,11 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const [config, setConfig] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const googleMount = useRef(null);
-  const googleCallback = useRef(null);
 
   useEffect(() => {
     if (!loading && staff) navigate("/", { replace: true });
@@ -47,83 +48,33 @@ export default function Login() {
     navigate("/", { replace: true });
   }, [refresh, navigate]);
 
-  const signInWithGoogle = useCallback(
-    async (credential) => {
-      setBusy(true);
-      setError("");
-      try {
-        await api.post("/auth/google", { credential });
-        await finish();
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [finish],
-  );
+  const submit = async (event) => {
+    event.preventDefault();
+    if (busy) return;
 
-  useEffect(() => {
-    googleCallback.current = signInWithGoogle;
-  }, [signInWithGoogle]);
-
-  useEffect(() => {
-    if (!config?.google_client_id) return undefined;
-    let cancelled = false;
-
-    const render = () => {
-      if (cancelled || !window.google?.accounts?.id || !googleMount.current) return;
-      window.google.accounts.id.initialize({
-        client_id: config.google_client_id,
-        ux_mode: "popup",
-        callback: (response) => googleCallback.current?.(response.credential),
-      });
-      googleMount.current.innerHTML = "";
-      window.google.accounts.id.renderButton(googleMount.current, {
-        theme: "filled_black",
-        size: "large",
-        shape: "pill",
-        text: "signin_with",
-        logo_alignment: "left",
-        width: 320,
-      });
-    };
-
-    if (window.google?.accounts?.id) {
-      render();
-      return () => {
-        cancelled = true;
-      };
+    const address = email.trim().toLowerCase();
+    if (!address || !password) {
+      setError("Enter your email and password.");
+      return;
     }
 
-    const existing = document.querySelector("script[data-google-gsi]");
-    if (existing) {
-      existing.addEventListener("load", render);
-      return () => {
-        cancelled = true;
-        existing.removeEventListener("load", render);
-      };
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.dataset.googleGsi = "true";
-    script.addEventListener("load", render);
-    document.head.appendChild(script);
-
-    return () => {
-      cancelled = true;
-      script.removeEventListener("load", render);
-    };
-  }, [config]);
-
-  const signInAs = async (email) => {
     setBusy(true);
     setError("");
     try {
-      await api.post("/auth/dev-login", { email });
+      await api.post("/auth/login", { email: address, password }, { silent: true });
+      await finish();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signInAs = async (accountEmail) => {
+    setBusy(true);
+    setError("");
+    try {
+      await api.post("/auth/dev-login", { email: accountEmail });
       await finish();
     } catch (err) {
       setError(err.message);
@@ -169,37 +120,68 @@ export default function Login() {
               <div className="card p-6">
                 <h2 className="text-base font-bold tracking-tight text-ink">Sign in</h2>
                 <p className="mt-1 text-[13px] text-ink-soft">
-                  Use the Google account your hospital added for you.
+                  Use the email and password your hospital gave you.
                 </p>
 
-                {config?.google_sign_in_enabled ? (
-                  <div className="mt-5 flex min-h-[44px] justify-center" ref={googleMount} />
-                ) : (
-                  <div className="mt-5 rounded-xl border border-dashed border-line bg-canvas px-4 py-4 text-[12.5px] leading-relaxed text-ink-soft">
-                    {config === null
-                      ? "Checking sign-in options…"
-                      : config.preview_mode
-                        ? "Google sign-in will appear here once the hospital's Google client ID is configured. Use a preview account below."
-                        : "Google sign-in is not configured for this environment yet. Contact your administrator."}
+                <form onSubmit={submit} className="mt-5 space-y-4">
+                  <div>
+                    <label className="label" htmlFor="login-email">
+                      Email
+                    </label>
+                    <input
+                      id="login-email"
+                      type="email"
+                      className="input mt-1.5"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="you@hospital.org"
+                      autoComplete="username"
+                      autoFocus
+                      required
+                    />
                   </div>
-                )}
 
-                {busy && (
-                  <p className="mt-3 flex items-center gap-2 text-[12.5px] font-medium text-forest-700">
-                    <Loader2 size={14} className="animate-spin" />
-                    Signing you in…
-                  </p>
-                )}
-
-                {error && (
-                  <div
-                    role="alert"
-                    className="mt-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] text-red-700"
-                  >
-                    <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                    <span>{error}</span>
+                  <div>
+                    <label className="label" htmlFor="login-password">
+                      Password
+                    </label>
+                    <div className="relative mt-1.5">
+                      <input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        className="input pr-11"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Your password"
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-ink-muted transition-colors hover:text-ink"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
-                )}
+
+                  {error && (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] text-red-700"
+                    >
+                      <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn-primary w-full" disabled={busy}>
+                    {busy ? <Loader2 size={15} className="animate-spin" /> : <LogIn size={15} />}
+                    {busy ? "Signing you in…" : "Sign in"}
+                  </button>
+                </form>
               </div>
 
               {config?.preview_mode && accounts.length > 0 && (
@@ -240,8 +222,8 @@ export default function Login() {
               <div className="rounded-2xl border border-line bg-white/70 p-4">
                 <p className="text-[12.5px] font-semibold text-ink">Invitation only</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
-                  There is no public sign-up. If you don't have an account yet, ask your super admin to add
-                  your Google email to the staff list.
+                  There is no public sign-up. If you don't have an account yet, ask your super admin to create
+                  one and share your first password with you.
                 </p>
               </div>
             </div>

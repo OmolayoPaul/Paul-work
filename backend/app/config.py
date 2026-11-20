@@ -7,12 +7,13 @@ class Settings(BaseSettings):
     app_name: str = "Afridetect EMR"
     database_url: str = "postgresql+psycopg://afridetect:afridetect_dev@db:5432/afridetect"
 
-    # The Google account that owns the first super admin account.
+    # The account that owns the first super admin login.
     super_admin_email: str = "admin@afridetect.ng"
     super_admin_name: str = "System Administrator"
 
-    # Google OAuth Web Client ID. Empty means Google sign-in is not wired yet.
-    google_client_id: str = ""
+    # Initial password for the seeded super admin. When empty, the setup service
+    # generates a random one and prints it once.
+    super_admin_password: str = ""
 
     session_idle_minutes: int = 15
     session_absolute_hours: int = 12

@@ -45,7 +45,7 @@ class Staff(Base):
     status: Mapped[StaffStatus] = mapped_column(
         SAEnum(StaffStatus, name="staff_status"), nullable=False, default=StaffStatus.active
     )
-    google_sub: Mapped[str | None] = mapped_column(String(120))
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

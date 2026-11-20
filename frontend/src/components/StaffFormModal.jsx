@@ -12,6 +12,7 @@ const EMPTY = {
   staff_id: "",
   role: "doctor",
   department: "",
+  password: "",
 };
 
 function valuesFor(person) {
@@ -23,6 +24,7 @@ function valuesFor(person) {
     staff_id: person.staff_id || "",
     role: person.role || "doctor",
     department: person.department || "",
+    password: "",
   };
 }
 
@@ -54,7 +56,15 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
       return;
     }
     if (!editing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Enter the Google email address they will sign in with.");
+      setError("Enter the email address they will sign in with.");
+      return;
+    }
+    if (!editing && values.password.length < 8) {
+      setError("Set an initial password of at least 8 characters.");
+      return;
+    }
+    if (editing && values.password && values.password.length < 8) {
+      setError("A new password needs at least 8 characters.");
       return;
     }
 
@@ -68,6 +78,7 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
         staff_id: values.staff_id.trim(),
         department: values.department.trim(),
       };
+      if (values.password) payload.password = values.password;
       const saved = editing
         ? await api.patch(`/staff/${person.id}`, payload)
         : await api.post("/staff", { ...payload, email });
@@ -86,8 +97,8 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
       title={editing ? `Edit ${person.full_name}` : "Add staff"}
       description={
         editing
-          ? "Update their role, department or contact details."
-          : "Create a staff account. Only a Google account on this list can sign in."
+          ? "Update their role, department or contact details, or set a new password."
+          : "Create a staff account with a first password they can change after signing in."
       }
       footer={
         <div className="flex items-center justify-end gap-2">
@@ -119,7 +130,7 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
 
         <div>
           <label className="label" htmlFor="staff-email">
-            Google email
+            Sign-in email
           </label>
           <input
             id="staff-email"
@@ -134,8 +145,30 @@ export default function StaffFormModal({ open, person, onClose, onSaved }) {
           />
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
             {editing
-              ? "The sign-in email cannot be changed. Add a new account for a different Google address."
-              : "They sign in with this Google account — there is no password to set."}
+              ? "The sign-in email cannot be changed. Add a new account for a different address."
+              : "They sign in with this email and the password you set below."}
+          </p>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="staff-password">
+            {editing ? "New password (optional)" : "Initial password"}
+          </label>
+          <input
+            id="staff-password"
+            type="password"
+            className="input mt-1.5"
+            value={values.password}
+            onChange={setField("password")}
+            placeholder={editing ? "Leave blank to keep the current password" : "At least 8 characters"}
+            autoComplete="new-password"
+            minLength={8}
+            required={!editing}
+          />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+            {editing
+              ? "Setting a new password signs them out everywhere and ends their other sessions."
+              : "Share it with them privately — they can change it from Settings after signing in."}
           </p>
         </div>
 
