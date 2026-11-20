@@ -202,21 +202,34 @@ def scan_patient_card(*, data: bytes, mime_type: str, file_name: str) -> dict:
     }
 
     started = time.monotonic()
-    try:
-        response = requests.post(
-            GEMINI_ENDPOINT.format(model=settings.gemini_model),
-            headers={
-                "x-goog-api-key": settings.gemini_api_key,
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
-    except requests.RequestException:
-        logger.exception("Gemini request failed for %s", file_name)
+    url = GEMINI_ENDPOINT.format(model=settings.gemini_model)
+    headers = {
+        "x-goog-api-key": settings.gemini_api_key,
+        "Content-Type": "application/json",
+    }
+
+    # Gemini occasionally returns 503 under heavy load; retry once after a
+    # brief pause before surfacing the error to the user.
+    for attempt in range(2):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+        except requests.RequestException:
+            logger.exception("Gemini request failed for %s", file_name)
+            raise ScanError(
+                "The scan service could not be reached. Check the connection and try again, or type the details manually."
+            ) from None
+
+        if response.status_code != 503 or attempt == 1:
+            break
+        time.sleep(2)
+
+    if response.status_code == 503:
+        logger.warning("Gemini returned 503 for %s after retry", file_name)
         raise ScanError(
-            "The scan service could not be reached. Check the connection and try again, or type the details manually."
-        ) from None
+            "The scan service is busy right now. Wait a moment and try again, or type the details manually.",
+            status=503,
+            code="scan_busy",
+        )
 
     if response.status_code >= 400:
         logger.warning("Gemini returned %s for %s: %s", response.status_code, file_name, response.text[:400])
