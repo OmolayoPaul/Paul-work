@@ -18,6 +18,7 @@ import {
 
 import StatCard from "../components/StatCard";
 import { api } from "../lib/api";
+import { auditActionLabel } from "../lib/audit";
 import { useAuth } from "../lib/auth";
 import { firstName, formatDate, greeting, relativeTime } from "../lib/format";
 import { ROLE_LABELS } from "../lib/nav";
@@ -65,21 +66,6 @@ const QUICK_ACTIONS = {
     { to: "/reports", label: "Reports", hint: "Clinic activity summaries", icon: BarChart3 },
     { to: "/messages", label: "Messages", hint: "Coordinate with the team", icon: Stethoscope },
   ],
-};
-
-const ACTION_LABELS = {
-  login: "Signed in",
-  logout: "Signed out",
-  login_denied: "Sign-in denied",
-  login_blocked: "Sign-in blocked",
-  staff_created: "Staff added",
-  staff_updated: "Staff updated",
-  staff_deactivated: "Staff deactivated",
-  staff_reactivated: "Staff reactivated",
-  patient_viewed: "Patient record opened",
-  patient_created: "Patient registered",
-  patient_updated: "Patient record changed",
-  ocr_scan: "Card scan",
 };
 
 export default function Home() {
@@ -316,7 +302,7 @@ export default function Home() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12.5px] font-medium text-ink">
-                      {ACTION_LABELS[event.action] || event.action}
+                      {auditActionLabel(event.action)}
                       {event.actor_name ? ` · ${event.actor_name}` : event.actor_email ? ` · ${event.actor_email}` : ""}
                     </p>
                     <p className="truncate text-[11px] text-ink-muted">{event.summary || "—"}</p>

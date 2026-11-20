@@ -179,13 +179,26 @@ def update_staff(
     if "status" in changes:
         action = "staff_reactivated" if next_status == StaffStatus.active else "staff_deactivated"
 
+    field_labels = {
+        "full_name": "name",
+        "phone": "phone",
+        "staff_id": "staff ID",
+        "department": "department",
+        "role": "role",
+        "status": "status",
+    }
+    if action == "staff_updated" and changes:
+        summary = f"{person.full_name}: changed {', '.join(field_labels.get(key, key) for key in changes)}"
+    else:
+        summary = f"{person.full_name}: {action.replace('staff_', '').replace('_', ' ')}"
+
     log_event(
         db,
         action=action,
         actor=admin,
         entity_type="staff",
         entity_id=person.id,
-        summary=f"{person.full_name}: {action.replace('staff_', '').replace('_', ' ')}",
+        summary=summary,
         meta={"changes": {key: {"from": value[0], "to": value[1]} for key, value in changes.items()}},
     )
     return staff_public(person)

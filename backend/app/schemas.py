@@ -32,6 +32,7 @@ def audit_public(event: AuditEvent) -> dict:
         "patient_id": event.patient_id,
         "patient_name": event.patient_name,
         "summary": event.summary,
+        "meta": event.meta,
         "ip": event.ip,
         "created_at": iso(event.created_at),
     }
