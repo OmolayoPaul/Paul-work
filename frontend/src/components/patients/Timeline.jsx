@@ -27,7 +27,7 @@ const NOTE_SECTIONS = [
   ["plan", "Plan"],
 ];
 
-export default function Timeline({ entries, emptyHint }) {
+export default function Timeline({ entries, emptyHint, canEditNote, onEditNote, onDeleteNote }) {
   if (!entries.length) {
     return (
       <div className="px-5 py-10 text-center">
@@ -64,6 +64,43 @@ export default function Timeline({ entries, emptyHint }) {
                     </div>
                   ))}
                 </dl>
+              )}
+
+              {entry.kind === "note" && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  {(entry.meta?.version || 1) > 1 && (
+                    <span className="chip bg-canvas px-2 py-0.5 text-ink-soft">
+                      Version {entry.meta.version}
+                    </span>
+                  )}
+                  {canEditNote && (
+                    <>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-forest-700 underline-offset-2 hover:underline"
+                        onClick={() => onEditNote?.(entry)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-red-600 underline-offset-2 hover:underline"
+                        onClick={() => onDeleteNote?.(entry)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {entry.kind === "attachment" && entry.meta?.download_url && (
+                <a
+                  href={entry.meta.download_url}
+                  className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-forest-700 underline-offset-2 hover:underline"
+                >
+                  <Paperclip size={12} /> Download {entry.meta.filename || "file"}
+                </a>
               )}
 
               {entry.kind === "prescription" && entry.meta?.items?.length > 0 && (

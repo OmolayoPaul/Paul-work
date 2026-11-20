@@ -15,14 +15,14 @@ function parseJson(text) {
   }
 }
 
-async function request(path, { method = "GET", body, silent = false } = {}) {
+async function request(path, { method = "GET", body, form, silent = false } = {}) {
   let response;
   try {
     response = await fetch(`/api${path}`, {
       method,
       credentials: "include",
       headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      body: form || (body ? JSON.stringify(body) : undefined),
     });
   } catch {
     throw new ApiError("Could not reach the server. Check your connection and try again.", {
@@ -59,6 +59,8 @@ export const api = {
   post: (path, body, options) => request(path, { ...options, method: "POST", body }),
   patch: (path, body, options) => request(path, { ...options, method: "PATCH", body }),
   delete: (path, options) => request(path, { ...options, method: "DELETE" }),
+  /** Multipart upload (file fields); the browser sets the boundary header. */
+  upload: (path, form, options) => request(path, { ...options, method: "POST", form }),
 };
 
 /** Fetch a file (CSV export) with the session cookie and save it locally. */

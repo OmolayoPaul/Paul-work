@@ -96,6 +96,7 @@ def patient_summary(patient: Patient, last_visit: Visit | None = None) -> dict:
         "email": patient.email,
         "address": patient.address,
         "nhis_no": patient.nhis_no,
+        "card_no": patient.card_no,
         "blood_group": patient.blood_group,
         "genotype": patient.genotype,
         "next_of_kin": patient.next_of_kin,
@@ -155,6 +156,8 @@ def vital_public(vital: VitalSigns) -> dict:
 def note_public(note: ClinicalNote) -> dict:
     return {
         "id": note.id,
+        "thread_id": note.thread_id or note.id,
+        "version": note.version or 1,
         "visit_id": note.visit_id,
         "note_type": note.note_type,
         "subjective": note.subjective,
@@ -248,8 +251,11 @@ def attachment_public(attachment: Attachment) -> dict:
         "filename": attachment.filename,
         "kind": attachment.kind,
         "description": attachment.description,
+        "mime_type": attachment.mime_type,
+        "size_bytes": attachment.size_bytes,
         "uploaded_by_name": attachment.uploaded_by_name,
         "created_at": iso(attachment.created_at),
+        "download_url": f"/api/patients/{attachment.patient_id}/attachments/{attachment.id}/download",
     }
 
 
@@ -312,6 +318,8 @@ def build_timeline(
                 "visit_id": note.visit_id,
                 "meta": {
                     "note_type": note.note_type,
+                    "version": note.version or 1,
+                    "thread_id": note.thread_id or note.id,
                     "subjective": note.subjective,
                     "objective": note.objective,
                     "assessment": note.assessment,
@@ -401,7 +409,11 @@ def build_timeline(
                 "author": attachment.uploaded_by_name,
                 "at": iso(attachment.created_at),
                 "visit_id": attachment.visit_id,
-                "meta": {"kind": attachment.kind},
+                "meta": {
+                    "kind": attachment.kind,
+                    "filename": attachment.filename,
+                    "download_url": f"/api/patients/{attachment.patient_id}/attachments/{attachment.id}/download",
+                },
             }
         )
 

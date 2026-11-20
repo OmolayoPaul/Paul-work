@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -6,11 +6,13 @@ import {
   CircleHelp,
   LogOut,
   Menu,
+  MessageSquare,
   Settings as SettingsIcon,
   Volume2,
   VolumeX,
 } from "lucide-react";
 
+import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { pageTitleFor, ROLE_LABELS } from "../lib/nav";
 import { playChime, TEXT_SIZES, usePreferences } from "../lib/preferences";
@@ -22,9 +24,29 @@ export default function TopBar({ onMenu }) {
   const { staff, signOut } = useAuth();
   const [preferences, updatePreferences] = usePreferences();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const title = pageTitleFor(location.pathname);
+
+  useEffect(() => {
+    if (!staff) return undefined;
+    let cancelled = false;
+    const loadUnread = async () => {
+      try {
+        const data = await api.get("/messages/unread-count", { silent: true });
+        if (!cancelled) setUnread(data?.unread || 0);
+      } catch {
+        /* the badge is not critical */
+      }
+    };
+    loadUnread();
+    const timer = setInterval(loadUnread, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [staff, location.pathname]);
 
   const toggleSound = () => {
     const next = !preferences.sound;
@@ -107,25 +129,58 @@ export default function TopBar({ onMenu }) {
           <Popover
             width="w-72"
             trigger={({ toggle }) => (
-              <button type="button" className="icon-btn" onClick={toggle} aria-label="Notifications" title="Notifications">
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={toggle}
+                aria-label={unread ? `Notifications, ${unread} unread messages` : "Notifications"}
+                title="Notifications"
+              >
                 <Bell size={19} />
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-accent ring-2 ring-white" />
+                {unread > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[9.5px] font-bold text-white ring-2 ring-white">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                ) : (
+                  <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-line ring-2 ring-white" />
+                )}
               </button>
             )}
           >
-            {() => (
+            {({ close }) => (
               <div>
                 <div className="flex items-center justify-between px-2 py-1">
                   <p className="text-sm font-semibold text-ink">Notifications</p>
-                  <span className="chip bg-forest-50 text-forest-700">0 new</span>
+                  <span className="chip bg-forest-50 text-forest-700">{unread} new</span>
                 </div>
-                <div className="mt-2 rounded-xl bg-canvas px-3 py-6 text-center">
-                  <Bell size={20} className="mx-auto text-ink-muted" />
-                  <p className="mt-2 text-[13px] font-medium text-ink">You're all caught up</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                    Lab results, order updates and messages will show up here.
-                  </p>
-                </div>
+                {unread > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close();
+                      navigate("/messages");
+                    }}
+                    className="mt-2 flex w-full items-start gap-2 rounded-xl bg-canvas px-3 py-3 text-left hover:bg-forest-50"
+                  >
+                    <MessageSquare size={16} className="mt-0.5 shrink-0 text-forest-700" />
+                    <span>
+                      <span className="block text-[12.5px] font-semibold text-ink">
+                        {unread} unread message{unread === 1 ? "" : "s"}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-ink-muted">
+                        Open Messages to read and reply.
+                      </span>
+                    </span>
+                  </button>
+                ) : (
+                  <div className="mt-2 rounded-xl bg-canvas px-3 py-6 text-center">
+                    <Bell size={20} className="mx-auto text-ink-muted" />
+                    <p className="mt-2 text-[13px] font-medium text-ink">You&apos;re all caught up</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                      Lab results, order updates and messages will show up here.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </Popover>

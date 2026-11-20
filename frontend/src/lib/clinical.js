@@ -28,6 +28,24 @@ export function canAttend(role) {
   return ATTENDING_ROLES.includes(role);
 }
 
+export const LAB_ROLES = ["super_admin", "lab_scientist"];
+export const PHARMACY_ROLES = ["super_admin", "pharmacist"];
+
+export function canEnterLabResult(role) {
+  return LAB_ROLES.includes(role);
+}
+
+export function canDispense(role) {
+  return PHARMACY_ROLES.includes(role);
+}
+
+export const SCANNER_ROLES = ["super_admin", "doctor", "records_officer"];
+
+/** Card scanning is limited to the roles that register patients. */
+export function canScan(role) {
+  return SCANNER_ROLES.includes(role);
+}
+
 export const TIMELINE_FILTERS = [
   { value: "all", label: "View All" },
   { value: "vitals", label: "Vital Signs" },

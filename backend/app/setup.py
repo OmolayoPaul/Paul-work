@@ -60,12 +60,19 @@ CLINICS = [
 # existing databases get the new columns from these idempotent statements.
 COLUMN_MIGRATIONS = [
     ("patients", "email", "VARCHAR(255)"),
+    ("patients", "card_no", "VARCHAR(40)"),
     ("patients", "genotype", "VARCHAR(10)"),
     ("patients", "next_of_kin_phone", "VARCHAR(40)"),
     ("patients", "occupation", "VARCHAR(120)"),
     ("patients", "marital_status", "VARCHAR(20)"),
     ("patients", "is_demo", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("staff", "password_hash", "VARCHAR(255)"),
+    ("clinical_notes", "thread_id", "VARCHAR(32)"),
+    ("clinical_notes", "version", "INTEGER NOT NULL DEFAULT 1"),
+    ("clinical_notes", "is_deleted", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("attachments", "mime_type", "VARCHAR(120)"),
+    ("attachments", "size_bytes", "INTEGER"),
+    ("attachments", "content", "BYTEA"),
 ]
 
 # Fictional people only. Every one is flagged is_demo so it can be removed.
@@ -316,7 +323,7 @@ def _seed_clinical_entries(
             visit_id=visit.id,
             test_name=with_lab,
             specimen="Blood",
-            status="resulted" if release_lab else "pending",
+            status="completed" if release_lab else "pending",
             requested_by_id=doctor.id,
             requested_by_name=doctor.full_name,
             created_at=when + timedelta(minutes=26),

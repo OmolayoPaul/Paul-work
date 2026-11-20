@@ -4,7 +4,19 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Enum as SAEnum,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -124,6 +136,7 @@ class Patient(Base):
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(300))
     nhis_no: Mapped[str | None] = mapped_column(String(40), index=True)
+    card_no: Mapped[str | None] = mapped_column(String(40), index=True)
     blood_group: Mapped[str | None] = mapped_column(String(10))
     genotype: Mapped[str | None] = mapped_column(String(10))
     next_of_kin: Mapped[str | None] = mapped_column(String(160))
@@ -206,6 +219,11 @@ class ClinicalNote(Base):
     plan: Mapped[str | None] = mapped_column(Text)
     author_id: Mapped[str | None] = mapped_column(String(32))
     author_name: Mapped[str | None] = mapped_column(String(160))
+    # Every edit is stored as a new version; the previous versions are kept.
+    thread_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Deleting hides a note from the record but keeps the row and its versions.
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
@@ -318,6 +336,9 @@ class Attachment(Base):
     filename: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), default="document", nullable=False)
     description: Mapped[str | None] = mapped_column(String(300))
+    mime_type: Mapped[str | None] = mapped_column(String(120))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
     uploaded_by_id: Mapped[str | None] = mapped_column(String(32))
     uploaded_by_name: Mapped[str | None] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

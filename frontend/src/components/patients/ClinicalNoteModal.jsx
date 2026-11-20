@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, Loader2, Stethoscope } from "lucide-react";
 
 import Modal from "../Modal";
@@ -12,10 +12,29 @@ const SECTIONS = [
   { key: "plan", label: "Plan", placeholder: "Investigations, treatment, follow-up…" },
 ];
 
-export default function ClinicalNoteModal({ open, onClose, patientId, visitId, onSaved }) {
-  const [form, setForm] = useState({ note_type: "consultation" });
+const EMPTY = { note_type: "consultation" };
+
+export default function ClinicalNoteModal({ open, onClose, patientId, visitId, onSaved, note }) {
+  const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const editing = Boolean(note?.id);
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    if (editing) {
+      setForm({
+        note_type: note.note_type || "consultation",
+        subjective: note.meta?.subjective || "",
+        objective: note.meta?.objective || "",
+        assessment: note.meta?.assessment || "",
+        plan: note.meta?.plan || "",
+      });
+    } else {
+      setForm(EMPTY);
+    }
+  }, [open, editing, note]);
 
   const setField = (key) => (event) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -26,16 +45,20 @@ export default function ClinicalNoteModal({ open, onClose, patientId, visitId, o
     event.preventDefault();
     setSaving(true);
     setError("");
+    const payload = {
+      note_type: form.note_type,
+      subjective: form.subjective || null,
+      objective: form.objective || null,
+      assessment: form.assessment || null,
+      plan: form.plan || null,
+    };
     try {
-      await api.post(`/patients/${patientId}/notes`, {
-        visit_id: visitId || null,
-        note_type: form.note_type,
-        subjective: form.subjective || null,
-        objective: form.objective || null,
-        assessment: form.assessment || null,
-        plan: form.plan || null,
-      });
-      setForm({ note_type: "consultation" });
+      if (editing) {
+        await api.patch(`/patients/${patientId}/notes/${note.id}`, payload);
+      } else {
+        await api.post(`/patients/${patientId}/notes`, { visit_id: visitId || null, ...payload });
+      }
+      setForm(EMPTY);
       onSaved?.();
     } catch (err) {
       setError(err.message);
@@ -48,17 +71,23 @@ export default function ClinicalNoteModal({ open, onClose, patientId, visitId, o
     <Modal
       open={open}
       onClose={onClose}
-      title="Clinical note"
-      description="Document the consultation for this visit."
+      title={editing ? "Edit clinical note" : "Clinical note"}
+      description={
+        editing
+          ? "Saving creates a new version. The earlier version stays in the record."
+          : "Document the consultation for this visit."
+      }
       size="max-w-2xl"
       footer={
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-ink-muted">Signed with your name and the current time.</p>
+          <p className="text-[11px] text-ink-muted">
+            {editing ? `Editing version ${note?.meta?.version || 1}` : "Signed with your name and the current time."}
+          </p>
           <div className="flex items-center gap-2">
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" form="note-form" className="btn-primary" disabled={saving || empty}>
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Stethoscope size={16} />}
-              Save note
+              {editing ? "Save new version" : "Save note"}
             </button>
           </div>
         </div>
