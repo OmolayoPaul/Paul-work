@@ -53,7 +53,7 @@ Seeded accounts:
 | Records officer | `records@afridetect.ng`|
 | Pharmacist      | `pharmacy@afridetect.ng` |
 | Lab scientist   | `lab@afridetect.ng`    |
-| Admin staff     | `admin@afridetect.ng`  |
+| Admin staff     | `frontdesk@afridetect.ng` |
 
 Any Google account that is not in the staff list is refused with
 "Your account has not been created. Contact your administrator."
@@ -81,21 +81,35 @@ Any Google account that is not in the staff list is refused with
   Signs, Treatment Plan, Prescription, Investigations, Lab, Others); newest-first
   clinical timeline; right-hand menu to record vitals, clinical notes,
   diagnoses, prescriptions (with line items), lab requests and allergies.
+- **Reports** (`/reports`) — patients seen per day, patients per clinic and top
+  diagnoses for the last 7, 30 or 90 days, each with a CSV download that works
+  even when there is no data (headings only). Super admin, doctor and admin
+  staff only.
 - **Data types** — Patient, Visit, VitalSigns, ClinicalNote, Diagnosis,
-  Prescription + PrescriptionItem, LabRequest, Allergy, Attachment, Clinic.
+  Prescription + PrescriptionItem, LabRequest + LabResult, Allergy, Attachment,
+  Clinic, Message, Staff, AuditEvent.
 
 Registration is limited to super admin, doctor, nurse and records officer.
 Clinical entries are written by doctors and nurses; diagnoses, prescriptions and
 lab requests are doctor-only. Every registration, check-in, record opening and
 clinical entry is appended to the audit log.
 
-In preview mode the setup service seeds five clinics and six demo patients with
-visits, vitals, a clinical note, a diagnosis, a prescription and lab requests so
-the worklist and record can be reviewed without typing data.
+In preview mode the setup service seeds five clinics and **15 fictional demo
+patients** with visits, vitals, notes, diagnoses, prescriptions and lab requests,
+so every page has something to show. Every demo patient carries
+`is_demo = true` and is labelled "Demo" in the worklist and patient register.
+Nothing about a demo record is real patient data. Remove all of it with:
+
+```bash
+docker compose -f docker-compose.base44.yml run --rm setup python -m app.setup --remove-demo
+```
+
+Demo data is seeded only when `BASE44_PREVIEW_MODE=1`; a production database is
+never populated by the setup service.
 
 ## Status
 
-Prompts 1–3 of the build plan are in place: shell, branding, sign-in and roles;
-staff management and audit log; worklist, patient register and the patient
-medical record. OCR patient capture, orders, reports and dashboard analytics are
-next.
+In place: shell, branding, sign-in and roles; staff management and audit log;
+worklist, patient register and the patient medical record; reports with CSV
+export. Consultations, Records, Orders and Messages are still placeholder pages
+and are built next, together with OCR patient capture.

@@ -29,11 +29,25 @@
 - Tables are created by the `setup` service, not by the API. After changing
   `backend/app/models.py`, re-run it:
   `docker compose -f docker-compose.base44.yml run --rm setup`
-  (there is no migration tool yet; `create_all` only adds new tables).
-- Demo patients are seeded only when `patients` is empty and
-  `BASE44_PREVIEW_MODE=1`. To reseed the demo worklist, delete the demo
-  `patients` rows (cascades are not configured; remove their visits and clinical
-  entries too) and re-run `setup`.
+  (`create_all` only creates new tables; new columns on an existing table come
+  from the `COLUMN_MIGRATIONS` list in `app/setup.py`, which runs idempotent
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements — add a line there for
+  every new column).
+- Demo data: `app/setup.py` seeds 15 fictional patients (`is_demo = true`), each
+  with a visit today when relevant plus a completed visit in the past month so
+  the reports have numbers. Seeding is idempotent by `patient_no` and only runs
+  when `BASE44_PREVIEW_MODE=1`. Remove all of it with
+  `run --rm setup python -m app.setup --remove-demo`.
+- `is_demo` is surfaced as a "Demo" chip in the worklist and patient register.
+  Never present demo records as real patient data.
+- Reports live in `routers/reports.py`: `/api/reports/summary?days=7|30|90` and
+  `/api/reports/export/{patients-per-day|patients-per-clinic|top-diagnoses}.csv`.
+  Only super admin, doctor and admin staff may call them. CSV export always
+  returns a file — headings only when the period is empty.
+- Route permissions are defined once in `frontend/src/lib/nav.js`
+  (`NAV_SECTIONS[].items[].roles`); `App.jsx` wraps every page in `RoleGuard`,
+  which reads the same table, so a direct URL cannot reach a page the sidebar
+  hides. Keep the backend role lists in step with it.
 - Clinical writes are role-gated in `backend/app/routers/patients.py`:
   registration = super admin / doctor / nurse / records officer; vitals, notes
   and allergies = super admin / doctor / nurse; diagnoses, prescriptions and lab
@@ -51,6 +65,12 @@
 curl -s localhost:3000/ | head -5           # Vite serves index.html
 curl -s localhost:3000/api/health           # API through the Vite proxy
 docker compose -f docker-compose.base44.yml ps
+
+# Signed-in checks: keep the cookie jar from the preview sign-in call
+curl -s -c /tmp/jar -X POST localhost:3000/api/auth/dev-login \
+  -H 'Content-Type: application/json' -d '{"email":"admin@afridetect.ng"}'
+curl -s -b /tmp/jar "localhost:3000/api/reports/summary?days=30"
+curl -s -b /tmp/jar -D - "localhost:3000/api/reports/export/top-diagnoses?days=30"
 ```
 
 Sign-in is Google-only, so automated checks can use the preview account picker

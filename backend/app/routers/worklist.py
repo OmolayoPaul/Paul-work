@@ -82,6 +82,7 @@ def worklist(
                     "full_name": patient_name(visit.patient),
                     "sex": visit.patient.sex,
                     "age_display": f"{max((utcnow().date() - visit.patient.date_of_birth).days // 365, 0)}y",
+                    "is_demo": bool(visit.patient.is_demo),
                 },
             }
             for visit in rows

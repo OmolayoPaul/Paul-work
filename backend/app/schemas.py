@@ -9,6 +9,7 @@ from .models import (
     ClinicalNote,
     Diagnosis,
     LabRequest,
+    LabResult,
     Patient,
     Prescription,
     Staff,
@@ -92,12 +93,18 @@ def patient_summary(patient: Patient, last_visit: Visit | None = None) -> dict:
         "age": age_of(patient.date_of_birth),
         "age_display": age_display(patient.date_of_birth),
         "phone": patient.phone,
+        "email": patient.email,
         "address": patient.address,
         "nhis_no": patient.nhis_no,
         "blood_group": patient.blood_group,
+        "genotype": patient.genotype,
         "next_of_kin": patient.next_of_kin,
+        "next_of_kin_phone": patient.next_of_kin_phone,
+        "occupation": patient.occupation,
+        "marital_status": patient.marital_status,
         "clinic": clinic_public(patient.clinic) if patient.clinic else None,
         "registered_by_name": patient.registered_by_name,
+        "is_demo": bool(patient.is_demo),
         "created_at": iso(patient.created_at),
         "last_visit_at": iso(last_visit.checked_in_at) if last_visit else None,
         "last_visit_status": last_visit.status if last_visit else None,
@@ -194,6 +201,21 @@ def prescription_public(prescription: Prescription) -> dict:
     }
 
 
+def lab_result_public(result: LabResult) -> dict:
+    return {
+        "id": result.id,
+        "analyte": result.analyte,
+        "result_value": result.result_value,
+        "unit": result.unit,
+        "reference_range": result.reference_range,
+        "interpretation": result.interpretation,
+        "notes": result.notes,
+        "status": result.status,
+        "entered_by_name": result.entered_by_name,
+        "created_at": iso(result.created_at),
+    }
+
+
 def lab_public(lab: LabRequest) -> dict:
     return {
         "id": lab.id,
@@ -204,6 +226,7 @@ def lab_public(lab: LabRequest) -> dict:
         "result_summary": lab.result_summary,
         "requested_by_name": lab.requested_by_name,
         "created_at": iso(lab.created_at),
+        "results": [lab_result_public(result) for result in lab.results],
     }
 
 

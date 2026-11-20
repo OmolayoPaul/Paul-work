@@ -183,8 +183,15 @@ export default function PatientRecord() {
         <button type="button" className="btn-ghost px-2" onClick={() => navigate(-1)}>
           <ArrowLeft size={15} /> Back
         </button>
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-          {error || "Patient record could not be loaded."}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700"
+        >
+          <span className="flex-1">{error || "Patient record could not be loaded."}</span>
+          <button type="button" className="btn-secondary px-3 py-1.5 text-[12px]" onClick={load}>
+            <RefreshCw size={13} />
+            Retry
+          </button>
         </div>
       </div>
     );

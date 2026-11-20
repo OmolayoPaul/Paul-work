@@ -5,6 +5,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   UserCheck,
@@ -152,6 +153,14 @@ export default function StaffManagement() {
         >
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            className="btn-secondary px-2.5 py-1 text-[11.5px]"
+            onClick={reload}
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
           <button
             type="button"
             className="rounded-md p-0.5 hover:bg-white/60"
